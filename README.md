@@ -52,3 +52,5 @@ SJCam set the `creation_time` to the time when the recording of the segment fini
 This script will fix the `creation_time` of the segments too, by subtracting the cut's starting point time difference to the end of the SJCam segment, and also apply your local --diff parameter. (It will always round the microseconds to 0. As far as I've seen, gpx2video doesn't care with that.)
 
 Using this script on your sjcam recordings and with your gpx data eg. from [gpslog](https://play.google.com/store/apps/details?id=eu.basicairdata.graziano.gpslogger&authuser=0), you can make your gps related info as an overlay onto your SJCam recordings.
+
+I've added the [shell functions](vedit.sh) I usually use to the editing steps, with some explanation in there.
