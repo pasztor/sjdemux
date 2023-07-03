@@ -1,7 +1,7 @@
 # sjdemux
 SJCam &amp; Avidemux related things
 
-## OVerview
+## Overview
 Open your SJCam recordings in avidemux.
 Set both audio and video codec to copy.
 You can append segments freely.
@@ -54,3 +54,28 @@ This script will fix the `creation_time` of the segments too, by subtracting the
 Using this script on your sjcam recordings and with your gpx data eg. from [gpslog](https://play.google.com/store/apps/details?id=eu.basicairdata.graziano.gpslogger&authuser=0), you can make your gps related info as an overlay onto your SJCam recordings.
 
 I've added the [shell functions](vedit.sh) I usually use to the editing steps, with some explanation in there.
+
+# sjscan
+
+I found out recently, that the camera has a loop setting.
+
+If it's turned off, it records 4GiB segments, and usually a 3 second is missing from between the segments.
+I guess, the buffering or whatever takes some time and during this there's no more memory to record the new frames.
+
+On the other hand, if I turn on the loop, and set it to 10 minutes, it records segments 10 minutes and 1 second long.
+But these 601 second long segments have an overlapping second. Which I haven't even noticed in the first few video. Until my friend Dennis warned me about this overlap.
+
+Than later, I started to append the segments. Jump forward 10 minutes. Cut out the overlapping second. How luck is that, the SJCam makes every 15th frame as a keyframe in the recording, so you can cut out the exact overlapping second.
+
+But that was still an awful lot of work, and needed a lot of attention to append the segments into the sessions, than cut out the overlapping, while it's pretty much a problem which screams for automation. I can do mistakes. The code I wrote won't loose focus.
+
+So, here it is, the new script: sjscan.
+
+I made it flexible as much I felt, any parameters or felxibility might be required, but pretty much, just needs one mandatory argument:
+Point it to a directory, where the given recordings are, and it will generate you a bunch of .py scripts, what you can open in avidemux as a project script file, than you can do the editing on it. Save it under some different name. Than you can process the resulted .py file with the sjdemux script, as written above.
+
+So, the program's logic in a nutshell: If the current file's length is shorter than the defined default lenght (600 seconds), than I assume that's the end of the session.
+That is the point, where I stopped to drink some water, or at a petrol station, or to wipe off the bugs from my visor.
+
+Now this piece of script generated me the exact results in just a fragment of a second, what I was working on yesterday for at least an hour or half hour long.
+And that's just one day's video recording!
