@@ -55,7 +55,6 @@ class Avidemux:
     def audioSetShift(self, *argv, **kw) : pass
     def setContainer(self, *argv, **kw) : pass
 
-import argparse
 
 parser = argparse.ArgumentParser(description='''Helps processing SJcam recordings:
 
