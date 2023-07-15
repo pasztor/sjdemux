@@ -178,7 +178,6 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
             # But the camera clock is set to local time
             # To bridge the difference, we alter the camera clock so the start and stop times
             # of the session will be converted to gmt
-            print(f'Debug: {i}')
             start_time = time.mktime(time.gmtime(i['start_time'])) - self.__gpxdiff
             stop_time  = time.mktime(time.gmtime(i['stop_time' ])) + self.__gpxdiff
             outfilename = os.path.join(self.__destdir, i['prefix'] + '.gpx')
