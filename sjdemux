@@ -35,7 +35,11 @@ class Avidemux:
     def clearSegments(self): pass
 
     def addSegment(self, vidno, startms, durms):
-        newfilename = args.prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
+        if args.prefix is None:
+            prefix = args.pyfile.name[:-3]
+        else:
+            prefix = args.prefix
+        newfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
         if args.sliceonly:
             print(f"ffmpeg -i {self.videos[vidno]['filename']} -codec copy -ss {startms/1000000} -t {durms/1000000} {newfilename}")
         else:
@@ -71,8 +75,8 @@ parser = argparse.ArgumentParser(description='''Helps processing SJcam recording
         Since SJCam don\'t have a GPS clock, you might need to adjust the time with some
         \'diff\' value, so the speed looks accurate on the resulted overlay.''')
 
-parser.add_argument('-d', '--diff', default=os.environ.get('SJDENUX_DIFF', 0), type=float, help='Time diff to adjust the counted creation time')
-parser.add_argument('-p', '--prefix', default=os.environ.get('SJDEUMUX_PREFIX', 'sjavi'), help='Filename prefix for the resulting commands')
+parser.add_argument('-d', '--diff', default=os.environ.get('SJDEMUX_DIFF', 0), type=float, help='Time diff to adjust the counted creation time')
+parser.add_argument('-p', '--prefix', default=os.environ.get('SJDEMUX_PREFIX', None), help='Filename prefix for the resulting commands')
 parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used for slices in the resulting commands')
 parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
 parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')

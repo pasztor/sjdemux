@@ -133,3 +133,15 @@ concatvideo () {
 	rm $tempfile
 }
 
+# This is actually a separate script file in the build directory of gpx2video.
+# In the build directory I keep a symlink named wk pointing to the directory
+# I am actually working with.
+sjrender () {
+	for i in wk/202*.mp4 ; do
+		if [ -r /srv/work/$i ]; then
+			:
+		else
+			TZ=Europe/Dublin ./gpx2video -v -m $i -g ${i%n???.mp4} -l layout.xml -o /srv/work/$i  video
+		fi
+	done
+}

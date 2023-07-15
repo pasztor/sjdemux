@@ -79,3 +79,38 @@ That is the point, where I stopped to drink some water, or at a petrol station, 
 
 Now this piece of script generated me the exact results in just a fragment of a second, what I was working on yesterday for at least an hour or half hour long.
 And that's just one day's video recording!
+
+# Overall
+
+The Overall process as of this commit is the following:
+- Prerequisites:
+  - SJCam recorded files in a given directory, let's call it `/foo`
+  - SJCam file naming: `YYYY_MMDD_HHMMSS_NNN.MP4`
+  - gpslog recorded file, where the file name looks like as `YYYYMMDD-whatever.gpx`
+- Run sjscan:
+  - Usually, I do this step directly on the nas.
+  - `mkdir /foo/work`
+  - `cd /foo/work`
+  - My system default on almost every host is the TZ is set to GMT. But in the EU we still have Daylight Saving, so in case of certain command, this default needs to be overriden:
+  - `TZ=Europe/Dublin sjscan /foo`
+- Open all the `YYYY_MMDD_SNu.py` files one by one in avidemux, and do the editing. The final cut is going to `YYYY_MMDD_SNn.py`
+- Try to find out what's the clock difference between the camera and the realtime clock. That's a nasty one. I just default assume, it's 0. I generate the first file, than render it, and try to find out based on the rednered overlay when the speed changes from 0, and when I see the actual movement. As I said, it's a nasty one. Let's say, it's 18 seconds. Now let's create all the fragments for gpx2video: `for i in *.py ; do . <( sjdemux -d 18 $i ) ; done`
+- Now go to the VM where I have gpx2video, and start rendering the results:
+  - `ssh gpx2videohost`
+  - `cd ~/gpx2video/build`
+  - In this directory I have the `wk` symlink pointing to the /foo/work directory mounted via nfs from the nas.
+  - `. sjrender.sh` - This file's content will go to vedit.sh into the sjrender function
+- Now go to my work directory (This steps runs on my desktop with the badass ryzen cpu), and collect gpx2video's results than fix the audio what the gpx2video messed up:
+  - `cd ~/Videos/Work-MM-DD-Desc`
+  - `rsync -PaHx gpx2videohost:/srv/work/wk .`
+  - `cd wk`
+  - `for i in *S?n???.mp4 ; do replaceaudio $i /foo/work/$i ; done`
+- Now I can do the post-processing:
+  - Concatenate the files:
+    - `concatvideo YYYY_MMDD_F.mp4 wk/*a.mp4`
+  - Speedup to 4 times faster:
+    - `speedup4q YYYY_MMDD_F.mp4`
+  - Do the soundtrack editing in kdenlive, and export the audio into an mka file.
+  - Add the soundtrack to the result:
+    - `addsoundtrack YYYY_MMDD_Fs4.mp4 *.mka`
+  - Enjoy!
