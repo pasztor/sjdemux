@@ -73,6 +73,15 @@ speedup4q () {
 	ffmpeg -i "$orig" -filter_complex "[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]" -r 30 -crf 18 -map '[v]' -map '[a]' -ac 2 -ar 48000 "$new"
 }
 
+speedup4raw () {
+	orig="$1"
+	new="${orig%.*}s4.mp4"
+	tempfile=raw.h264
+	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v h264_mp4toannexb "$tempfile"
+	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -movflags -faststart "$new"
+	rm "$tempfile"
+}
+
 # Originally, when the speedup resulted a 120 or 119.88 fps video, I've smoothened it down to only 60fps. But YouTube tries to fit the videos into a certain bandwidth.
 # If the bandwith is the same, but you have 60fps video, that means, you have half the amount of data to store information about a frame compared to a 30fps video.
 # So, finally, I've decided to upload 30fps videos to youtube.
