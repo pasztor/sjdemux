@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+import os
+import sys
+import argparse
+import xml.etree.ElementTree as ET
+
+parser = argparse.ArgumentParser(description='''Process kdenlive file, and print playlist entries, what can be copied directly to the description''')
+parser.add_argument('-v', '--verbose', action='store_true', help='Print verbose debug messages during the processing of the file')
+parser.add_argument('-d', '--directory', default=os.environ.get('SJDEMUX_SOUNDTRACKDIR', '/store/yt'), help='Directory name where soundtrack files are. Any other file reference outside of this directory considered not part of the soundtrack')
+parser.add_argument('soundtrack', type=argparse.FileType('r'), help='kdenlive file')
+
+args = parser.parse_args()
+
+st = ET.parse(args.soundtrack)
+producers = dict()
+for producer in st.findall('producer'):
+  newproducer = dict()
+  producer_name = producer.attrib['id']
+  newproducer.update(producer.attrib)
+  for prodchild in producer:
+    if prodchild.attrib['name'] == 'resource':
+      newproducer.update({'filename': prodchild.text})
+  producers[producer_name] = newproducer
+
+if args.verbose:
+    for key in producers:
+      print(f'{key}: {producers.get(key)}')
+
+playlists = dict()
+for playlist in st.findall('playlist'):
+    plname = playlist.attrib['id']
+    entries = []
+    atplaylist = False
+    for plentry in playlist:
+        if plentry.tag == 'entry':
+            newentry = dict()
+            newentry.setdefault('type', 'producer')
+            newentry.update(plentry.attrib)
+            entries.append(newentry)
+        elif plentry.tag == 'blank':
+            newentry = dict()
+            newentry.setdefault('type', 'blank')
+            newentry.update(plentry.attrib)
+            entries.append(newentry)
+        elif plentry.tag == 'property' and plentry.attrib.get('name') == 'kdenlive:audio_track' and plentry.text == '1':
+            atplaylist = True
+    if atplaylist and len(entries) > 0:
+        playlists.setdefault(plname, entries)
+
+if args.verbose:
+    for plname, playlist in playlists.items():
+        print(f'{plname}: {playlist}')
+
+def hhmmss_to_sec(textime):
+    hh = int(textime[0:2])
+    mm = int(textime[3:5])
+    ss = int(textime[6:8])
+    fff = float(textime[8:])
+    return float(hh*3600+mm*60+ss+ fff)
+
+timeline = dict()
+for plname, playlist in playlists.items():
+    ctime = float(0)
+    for entry in playlist:
+        if args.verbose:
+            print(f'processing entry: {entry}')
+        if entry['type'] == 'blank':
+            ctime += hhmmss_to_sec(entry['length'])
+        elif entry['type'] == 'producer':
+            mlen = hhmmss_to_sec(entry['out']) - hhmmss_to_sec(entry['in'])
+            timeline.setdefault(str(ctime), []).append(producers[entry['producer']]['filename'])
+            ctime += mlen
+
+for tlkey in sorted([float(tlk) for tlk in timeline ]):
+    if args.verbose:
+        print(f'{tlkey}: {timeline[str(tlkey)]}')
+    for file in timeline[str(tlkey)]:
+        urlid = ''
+        cname = str(file)
+        if file.startswith(args.directory):
+            cname = cname.rsplit('.',1)[0]  # Remove filename extension
+            cname = cname.rsplit('/',1)[1]  # Remove directoryname
+            if cname.endswith(']'):
+                cname, urlid = cname.rsplit('[', 1)
+                urlid = urlid.rstrip(']')
+            else:
+                urlid = cname[-11:]
+                cname = cname[:-11]
+            cname = cname.rstrip('-')
+            cname = cname.replace('_', ' ')
+            cname = cname.title()
+            print(f'https://youtu.be/{urlid} | {cname}')
+
