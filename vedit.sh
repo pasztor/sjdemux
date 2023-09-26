@@ -154,3 +154,43 @@ sjrender () {
 		fi
 	done
 }
+
+#
+# Newest version of things as of 2023-09-26
+# NB: SJFILTER is now empty again, simple copy happens during sjdemux runs.
+#
+sjrenderimg () {
+for i in wk/202*.mp4 ; do
+	if [ -r wko/${i##*/} ]; then
+	       :
+       else
+	       gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
+	       fn="${i##*/}"
+	       echo prcessing $i - $gpx
+	       echo " ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image"
+	       TZ=Europe/Dublin ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image
+	fi
+done
+}
+
+# And the magic happens here:
+addoverlay () {
+	orig="$1"
+	ovl="$2"
+	origffn="${orig##*/}"
+	origfno="${origffn%.*}"
+	ffmpeg -i "$orig" \
+		-r 1 -i "${origfno}-${ovl}%04d.png" \
+		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
+		-map '[v]' -map '[a]' -c:v libx265 -crf 22 \
+		-ac 2 -ar 48000 \
+		-force_key_frames 'expr:gte(t,n_forced*10)' \
+		"${origfno}${ovl}.mp4"
+}
+
+# So, practically, I just needs to go into wko dir, and run
+# for i in ../wk/*.mp4 ; do addoverlay $i f ; done
+# Than concat all the pieces together: concatvideo 2023_MMDD_FOs4.mp4 2023_MMDD_S?n???f.mp4
+# And finally, the soundtrack can came.
+# This is now uses the least amount of cpu, the best codecs, the less amount of intermediate steps and storing intermediate files, etc.
+# With this trick, I probably won't even need to separate the wk and wko dir anymore as the mp4 segments won't overlap, and no more audio fixing is needed.

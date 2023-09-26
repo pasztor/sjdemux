@@ -1,6 +1,19 @@
 # CHANGELOG
 
-## 2023.09.21
+## 2023.09.25
+* Another redesign of the usage:
+  This time, not much change in the tooling, just the way it's used. I do not use gpx2video anymore to render the images onto the video files, I just render the overlay image files, than use ffmpeg to add the overlay onto the video. This way, I can do everything in just one filter_complex session: setting the proper fps on the input so, the unneded frames are dropped early in the chain of filters. Than I can do the overlay. Than the speedup of the video and audio in the same ffmpeg step.
+  Running ffmpeg this way takes - give or take - about the same amount of time, what it took previously just to run it to recode the original input stream to drop 3/4 of the frames. Except now there is no extra step needed. The full process is much more simpler now:
+  * render the image files
+  * add the overlay (and do the dropping, overlay and speedup of video and audio at the same time)
+  * concat the fragments
+  * add soundtrack
+
+## 2023.08.23
+* source option added to sjdemux:
+  When the recode to 7.5 fps is done, but the diff between the camera time and the estimated actual time wasn't good enough, I need to recalibrate the metadata of the files, but whole recode is not needed to be done again
+
+## 2023.08.21
 * sjplaylist added:
   This tool takes a kdenlive filename, than process its entries, and print them in a canonicalized format, so I could use the output in the description of the uploaded youtube content.
   To be honest, this one saves me a lot of time, and I was kind of lazy to do this development. But after some discussion with a friend called Peter, I decided that I won't procastrinate it any longer.

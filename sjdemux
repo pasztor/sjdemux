@@ -66,9 +66,13 @@ class Avidemux:
                     slice_ctime = vinfo_time_to_epoch(slice_info)
                     print(f'{newfilename} diff: {slice_ctime-newstartts}')
                 else:
-                    print(f'file doesn\'t exist: {newfilename}')
+                    print(f'file doesn\'t exist: {newfilename}', file=sys.stderr)
             else:
-                print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+                if args.sourcedir is None:
+                    print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+                else:
+                    sourcefile = os.path.join(args.sourcedir, newfilename)
+                    print(f"ffmpeg -i {sourcefile} -c copy -metadata 'creation_time={newstart}' {newfilename}")
         self.segments += 1
 
     def setPostProc(self, *argv, **kw): pass
@@ -101,6 +105,7 @@ parser = argparse.ArgumentParser(description='''Helps processing SJcam recording
 parser.add_argument('-d', '--diff', default=os.environ.get('SJDEMUX_DIFF', 0), type=float, help='Time diff to adjust the counted creation time')
 parser.add_argument('-D', '--diff-mode', action='store_true', help='Instead of printing the commands, it calculates what diff was provided earlier creating the files')
 parser.add_argument('-p', '--prefix', default=os.environ.get('SJDEMUX_PREFIX', None), help='Filename prefix for the resulting commands')
+parser.add_argument('-S', '--sourcedir', default=None, help='Source dir of pre-processed files')
 parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used for slices in the resulting commands')
 parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
 parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
