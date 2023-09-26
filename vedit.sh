@@ -182,7 +182,7 @@ addoverlay () {
 	ffmpeg -i "$orig" \
 		-r 1 -i "${origfno}-${ovl}%04d.png" \
 		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
-		-map '[v]' -map '[a]' -c:v libx265 -crf 22 \
+		-r 30 -map '[v]' -map '[a]' -c:v libx265 -crf 22 \
 		-ac 2 -ar 48000 \
 		-force_key_frames 'expr:gte(t,n_forced*10)' \
 		"${origfno}${ovl}.mp4"
