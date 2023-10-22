@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2023.10.22
+* Followup with Avidemux 2.8.1, new stub methods was needed to the fake Avidemux class
+* Media length is calculated based on video stream's length, not the "format" metadata length. Basing it on the format caused a regression.
+* Simplified addoverlay function. After the videos are generated I can still run the replaceaudio on the streams.
+
 ## 2023.09.25
 * Another redesign of the usage:
   This time, not much change in the tooling, just the way it's used. I do not use gpx2video anymore to render the images onto the video files, I just render the overlay image files, than use ffmpeg to add the overlay onto the video. This way, I can do everything in just one filter_complex session: setting the proper fps on the input so, the unneded frames are dropped early in the chain of filters. Than I can do the overlay. Than the speedup of the video and audio in the same ffmpeg step.

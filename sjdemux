@@ -49,6 +49,18 @@ class Avidemux:
         
     def clearSegments(self): pass
 
+    def setHDRConfig(self, *args): pass
+
+    def audioSetDrc2(self, *args): pass
+
+    def audioSetEq(self, *args): pass
+
+    def audioSetChannelGains(self, *args): pass
+
+    def audioSetChannelDelays(self, *args): pass
+
+    def audioSetChannelRemap(self, *args): pass
+
     def addSegment(self, vidno, startms, durms):
         if args.prefix is None:
             prefix = args.pyfile.name[:-3]

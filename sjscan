@@ -57,10 +57,10 @@ parser.add_argument('dir', help='Directory name to scan')
 args = parser.parse_args()
 
 def get_video_info(filename):
-    subproc = subprocess.run(['ffprobe', '-of', 'json', '-show_entries', 'format', filename], capture_output=True)
+    subproc = subprocess.run(['ffprobe', '-of', 'json', '-show_entries', 'format:streams', filename], capture_output=True)
     video_data = json.loads(subproc.stdout)
     return {
-            'len': float(video_data['format']['duration']),
+            'len': float(video_data['streams'][0]['duration']),
             'ctime': time.strptime(video_data['format']['tags']['creation_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
             }
 

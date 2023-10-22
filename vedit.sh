@@ -194,3 +194,28 @@ addoverlay () {
 # And finally, the soundtrack can came.
 # This is now uses the least amount of cpu, the best codecs, the less amount of intermediate steps and storing intermediate files, etc.
 # With this trick, I probably won't even need to separate the wk and wko dir anymore as the mp4 segments won't overlap, and no more audio fixing is needed.
+
+# ^ This approach wasn't exactly precise with the audio. Somehow it always caused some skew, so I went back to the basics:
+# Render the video and the audio in separate streams, so here comes add overlay simplified
+
+addoverlays () {
+	orig="$1"
+	ovl="$2"
+	origffn="${orig##*/}"
+	origfno="${origffn%.*}"
+	vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
+	aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
+		#-frames:a $aframes -frames:v $[(vframes+3)/4] \
+		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
+		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
+	ffmpeg -i "$orig" \
+		-r 1 -i "${origfno}-${ovl}%04d.png" \
+		-filter_complex 'overlay' \
+		-r 7.5  -an -c:v libx265 -crf 22 \
+		-frames:v $[(vframes+3)/4] \
+		"${origfno}${ovl}.mp4"
+}
+
+gentimesh () {
+	for i in 202?_????_S?t.py ; do sjdemux -d 0 $i ; done >timediff.sh
+	}
