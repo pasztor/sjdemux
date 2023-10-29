@@ -13,14 +13,15 @@ args = parser.parse_args()
 
 st = ET.parse(args.soundtrack)
 producers = dict()
-for producer in st.findall('producer'):
-  newproducer = dict()
-  producer_name = producer.attrib['id']
-  newproducer.update(producer.attrib)
-  for prodchild in producer:
-    if prodchild.attrib['name'] == 'resource':
-      newproducer.update({'filename': prodchild.text})
-  producers[producer_name] = newproducer
+
+for entry in st.findall('chain') + st.findall('producer'):
+  newentry = dict()
+  entry_name = entry.attrib['id']
+  newentry.update(entry.attrib)
+  for nodechild in entry:
+    if nodechild.attrib['name'] == 'resource':
+      newentry.update({'filename': nodechild.text})
+  producers[entry_name] = newentry
 
 if args.verbose:
     for key in producers:

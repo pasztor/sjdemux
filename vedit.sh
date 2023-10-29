@@ -82,6 +82,15 @@ speedup4raw () {
 	rm "$tempfile"
 }
 
+speedup4raw265af () {
+	orig="$1"
+	new="${orig%.*}s4.mp4"
+	tempfile=raw.h265
+	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v hevc_mp4toannexb "$tempfile"
+	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -ar 48000 -ac 2 -movflags -faststart "$new"
+	rm "$tempfile"
+}
+
 # Originally, when the speedup resulted a 120 or 119.88 fps video, I've smoothened it down to only 60fps. But YouTube tries to fit the videos into a certain bandwidth.
 # If the bandwith is the same, but you have 60fps video, that means, you have half the amount of data to store information about a frame compared to a 30fps video.
 # So, finally, I've decided to upload 30fps videos to youtube.
@@ -161,14 +170,14 @@ sjrender () {
 #
 sjrenderimg () {
 for i in wk/202*.mp4 ; do
-	if [ -r wko/${i##*/} ]; then
-	       :
-       else
-	       gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
-	       fn="${i##*/}"
-	       echo prcessing $i - $gpx
-	       echo " ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image"
-	       TZ=Europe/Dublin ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image
+	fn="${i##*/}"
+	if [ -r wko/${fn%.mp4}-f0000.png ]; then
+		:
+	else
+		gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
+		echo prcessing $i - $gpx
+		echo " ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image"
+		TZ=Europe/Dublin ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image
 	fi
 done
 }
@@ -217,5 +226,86 @@ addoverlays () {
 }
 
 gentimesh () {
-	for i in 202?_????_S?t.py ; do sjdemux -d 0 $i ; done >timediff.sh
-	}
+	for i in 202?_????_S?t.py ; do
+		sjdemux -d 0 $i ;
+	done >timediff.sh
+}
+
+telltimediffs () {
+	for i in 202?_????_S??.py ; do sjdemux -D $i ; done
+}
+
+renderallvideo () {
+	# So, if the work dir, where the images were generated is /store/vedit/WKO.0903
+	# Than sourcedir is /store/vedit/WK.0903
+	renderext="$1"
+	sourcedir="${PWD%?.*}.${PWD##*.}"
+	for i in ${sourcedir}/*.mp4 ; do
+		addoverlays "$i" "$renderext"
+	done
+}
+
+fixallvideo () {
+	sourcedir="${PWD%?.*}.${PWD##*.}"
+	renderext="$1"
+	for i in ${sourcedir}/*.mp4 ; do
+		fn="${i##*/}"
+		if [ -r "${fn%.mp4}${renderext}a.mp4" ] ; then
+			:
+		else
+			replaceaudio "${fn%.mp4}${renderext}.mp4" $i
+		fi
+	done
+}
+
+concatall () {
+	renderext="$1"
+	ucrenderext="$( echo -n $renderext | tr a-z A-Z )"
+	fnprefix="$( ls -1 *mp4 | head -1 | cut -c 1-9 )"
+	concatvideo ${fnprefix}_${ucrenderext}N.mp4 ${fnprefix}_S?n???${renderext}a.mp4
+}
+
+cleanupallvids () {
+	rm *mp4 *png
+}
+
+vedithelp () {
+	cat <<END
+gentimesh
+	# generates timediff.sh
+. timediff.sh
+	# Generates the timeing files
+vim timediff.sh
+	# Update the timestamp to the time in the clock on the video
+. timediff.sh
+	# To gneerate it again
+telltimediffs
+	# To find out the differences
+echo 'for i in 0 1 2 ; do . <( sjdemux -d -00 1970_0101_S0n.py | head -1 )' >>work.sh
+	# Create work.sh, update the i, the diff (-d) and the date accordingly
+. work.sh
+	# Generate the first set of videos
+	#### Now, run this in the gpx2video build dir:
+sjrenderimg
+	# The example sjrenderimg function uses the "f" renderext.
+	# Now go to the wko dir:
+renderallvideo f
+fixallvideo f
+	# Now check the result, if camera recorded clock was accurate to gps clock.
+	# If not, adjust all diff in work.sh accordingly in wk dir.
+	# Once that's done, remoeve the '| head -1' parts from the fwork.sh
+	#
+	# Now back to wk:
+cleanupallvids
+. work.sh
+	# Do a cleanupallvids in wko too
+	# Now go to the gpx2video build dir
+sjrenderimg
+	# Back to wko:
+renderallvideo f
+fixallvideo f
+concatall f
+speedup4raw265af 1970_0101_FN.mp4
+addsoundtrack 1970_0101_FNs4.mp4 *mka
+END
+}
