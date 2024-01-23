@@ -360,15 +360,9 @@
   <property name="kdenlive:docproperties.activetimeline">{{ '{' + s1uuid + '}' }}</property>
   <property name="xml_retain">1</property>
   <entry producer="{{ '{' + s1uuid + '}' }}" in="00:00:00.000" out="00:00:00.000"/>
-  <entry producer="chain0" in="00:00:00.000" out="00:24:42.100"/>
-  <entry producer="chain1" in="00:00:00.000" out="00:03:57.533"/>
-  <entry producer="chain2" in="00:00:00.000" out="00:04:00.800"/>
-  <entry producer="chain3" in="00:00:00.000" out="00:04:47.400"/>
-  <entry producer="chain4" in="00:00:00.000" out="00:04:49.467"/>
-  <entry producer="chain5" in="00:00:00.000" out="00:04:46.733"/>
-  <entry producer="chain6" in="00:00:00.000" out="00:05:04.900"/>
-  <entry producer="chain7" in="00:00:00.000" out="00:04:39.000"/>
-  <entry producer="chain8" in="00:00:00.000" out="00:02:53.800"/>
+{% for i in inputfiles %}
+  <entry producer="chain{{ loop.index0 }}" in="00:00:00.000"/>
+{% endfor %}
  </playlist>
  <tractor id="tractor6" in="00:00:00.000" out="00:00:00.000">
   <property name="kdenlive:projectTractor">1</property>
