@@ -1,11 +1,15 @@
 # CHANGELOG
 
+## 2024.01.23
+* sjscan creates the destination directory if it wasn't pre-existing
+* Added stgen to generate a starting project for kdenlive. For documentation, see README.md
+
 ## 2023.10.29
 * sjplaylist update, so it can generate the playlist from the mlt7 v7.16 based kdenlive files as well
 * Several vedit.sh improvements:
   * speedup4raw now has a hevc/h265 version
   * readability improvement in the sjrenderimg() and gentimesh() function
-  * new telltimediff function: to query every timediff cut, the time difference: Whenever I am at a point in my ride to replace battery, I start the new session with opening the gpslog app, and filming the gps clock on my phone's display. So if I make a few small cuts from the YYYY_MMDD_S?u???.py files, which only contains this few seconds while I'm filming the gps clock, I generate the timediff.sh using the gentimesh function. Than I edit the metadata time, to be the exact same I see on the first frame. Or if the clock change in the first 14 frame, than, whatever timestamp I see in the 15th frame. (Considering 30 fps, and that the ...S?t???.py cut starts at an integer second, and not at a half-second.) Than I run this modified (and not the original generated) timediff.sh. Than I can run the telltimediff, to find out what was the exact difference between the calculated time (which assumes, that the camera's clock are correct), and the corrected gps time. So later, I can use these as the -d parameter for the given segment's diff parameter.
+  * new telltimediff function: to query every timediff cut, the time difference: Whenever I am at a point in my ride to replace battery, I start the new session with opening the gpslog app, and filming the gps clock on my phone's display. So if I make a few small cuts from the `YYYY_MMDD_S?u???.py` files, which only contains this few seconds while I'm filming the gps clock, I generate the timediff.sh using the gentimesh function. Than I edit the metadata time, to be the exact same I see on the first frame. Or if the clock change in the first 14 frame, than, whatever timestamp I see in the 15th frame. (Considering 30 fps, and that the ...S?t???.py cut starts at an integer second, and not at a half-second.) Than I run this modified (and not the original generated) timediff.sh. Than I can run the telltimediff, to find out what was the exact difference between the calculated time (which assumes, that the camera's clock are correct), and the corrected gps time. So later, I can use these as the -d parameter for the given segment's diff parameter.
   * new renderallvideo function: A simple for loop to render every fragment video after the images are already rendered. The only parameter it requires, that if I want to render the f series files (or any other).
   * new fixallvideo function: A simple forloop to add the original mp4 files sound stream to the newly rendered video-only files. The only parameter it requires, that if I want to fix the f series files (or any other).
   * new concatall function, to concat all the rendered-fixed videos. The only parameter it requires, that I want to concat the f series of files (or any other).

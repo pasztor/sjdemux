@@ -222,6 +222,10 @@ if 'SJTZ' in os.environ:
     os.environ['TZ'] = os.environ['SJTZ']
     time.tzset()
 
+if not os.path.exists(args.destdir):
+    print(f'Destination directory {args.destdir} does not exist, creating it now', file=sys.stderr)
+    os.makedirs(args.destdir)
+
 mre = re.compile('^(?P<prefix>\d{4}_\d{4}_)\d{6}_\d{3}.mp4', re.I)
 list_of_files = sorted([i for i in os.listdir(args.dir) if mre.match(i) ])
 

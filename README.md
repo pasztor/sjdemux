@@ -80,6 +80,21 @@ That is the point, where I stopped to drink some water, or at a petrol station, 
 Now this piece of script generated me the exact results in just a fragment of a second, what I was working on yesterday for at least an hour or half hour long.
 And that's just one day's video recording!
 
+# stgen
+
+Another improvement in automating away manual parts of the creative process was that I watched the resulted video, but have to choose what soundtrack goes with the mood.
+So, I watched the video, and also, in another tab, I start a tmux where in one window, I run `mpv /soundtrackdir -shuffle -vo null` , helping me suggesting good soundtrack.
+If one track ends or about to end, I stop the video, and press enter in the mpv window. If the next song could be a good candidate, than `ctrl-a [` for tmux, put the `Playing: /soundtrackdir/file.webm` line to the clipboard with `ctrl-k`, than switch to the other window, and paste it there into the running `vim YYYY_MMDD_soundtrack.txt`. Than I can switch back, and let the video play resume.
+This was the *simple* part.
+The boring part part which I amed to automate with this script was when I had to open a new project in kdenlive and add each files to the project bin.
+
+Now just pass the resulting videofile and the `YYYY_MMDD_soundtrack.txt` and it will generate a `YYYY_MMDD_soundtrack.kdenlive`.
+In the template / resulting xml, I leave many of the file's metainfo attribute undefined, and let kdenlive deal with it when I open the resulted file.
+So, example command I run in my work directory (assuming, that I have a copy of the *sound(track)less* version already in the /store/foto share.
+`stgen /store/foto/2023/2023-12-09-Eventname/Work/2023_1209_FNs4.mp4 2023_1209_soundtrack.txt`
+
+Than it will generate the `2023_1209_soundtrack.kdenlive` which I can now open with kdenlive, and I only have to do the creative process by pulling the files from the project bin to the timeline area. (Or whatever is the name of that thing.)
+
 # Overall
 
 The Overall process as of this commit is the following:
