@@ -24,10 +24,14 @@ templateargs.setdefault('rootdir', soundtrack_path)
 templateargs.setdefault('inputfiles', list())
 
 templateargs['inputfiles'].append(args.videofile.name)
+lastfile = ''
 for line in args.soundtrackfile:
-    if '/' in line:
+    if line.startswith('/'):
         # Remove the 'Playing: ' or whatever garbage string prefixes the filenames
-        templateargs['inputfiles'].append('/' + line.split('/', 1)[1].rstrip())
+        filename = line.rstrip()
+        if filename != lastfile:
+            templateargs['inputfiles'].append(filename)
+        lastfile = filename
 
 outfile = args.soundtrackfile.name.rsplit('.', 1)[0] + '.kdenlive'
 if args.verbose:

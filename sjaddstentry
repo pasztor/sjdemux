@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+import os
+import socket
+import math
+import json
+
+main_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+st_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+main_sock.connect((os.path.join(os.environ['HOME'],'.config/mpv/main.sock')))
+st_sock.connect((os.path.join(os.environ['HOME'], '.config/mpv/st.sock')))
+
+def tsconv(ts):
+    f, i = math.modf(ts)
+    i = int(i)
+    sec = i % 60
+    mn = i // 60 % 60
+    hr = i // 3600
+    fs = f'{f:.6}'.split('.')[1]
+    return f'{hr}:{mn:02}:{sec:02}.{fs}'
+
+def get_property(socket, property):
+	rid = os.getpid()
+	request = {
+		'command': ['get_property', property],
+		'request_id': rid
+		}
+	socket.send(bytes(json.dumps(request) + '\n', 'ascii'))
+	recv = socket.recv(4096)
+	ret = None
+	for line in recv.decode().split('\n'):
+		try:
+			res = json.loads(line)
+			if res['request_id'] == rid:
+				if res['error'] == 'success':
+					ret = res['data']
+				else:
+					ret = res
+		except json.decoder.JSONDecodeError:
+			pass
+	return ret
+
+mainpos = get_property(main_sock, 'playback-time')
+stpos = get_property(st_sock, 'playback-time')
+stfile = get_property(st_sock, 'path')
+
+with open(os.environ.get('SJSTFILE', '/tmp/sjstgen.'+str(os.getpid())), 'a') as ouf:
+    ouf.write(f'{stfile}\n#pos: {stpos} - {tsconv(stpos)}\n#mainpos: {mainpos} - {tsconv(mainpos)}\n#startpos: {mainpos-stpos:.6} - {tsconv(mainpos-stpos)}\n')
+main_sock.close()
+st_sock.close()

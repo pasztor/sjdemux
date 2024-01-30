@@ -268,7 +268,7 @@
  {% for i in inputfiles %}
  <chain id="chain{{ loop.index0 }}">
   <property name="eof">pause</property>
-  <property name="resource">{{ i }}</property>
+  <property name="resource">{{ i|e }}</property>
   <property name="mlt_service">avformat</property>
   <property name="seekable">1</property>
   <property name="format">3</property>

@@ -1,0 +1,28 @@
+#!/bin/sh
+if [ "$1" == "-h" ]; then
+	cat <<END
+sjmpv can be called with two different kind of way:
+
+Option #1:
+sjmpv soundtrack.txt mainfile.mp4
+
+This way it will start the "main" player
+
+Option #2:
+sjmpv soundtrack.txt /soundtrack/directory
+
+This way it will start the "soundtrack" player
+
+The difference between the main player and the soundtrack player, that:
+- The two listens on two different ipc sockets
+- The soundtrack player will play the directory shuffled, and with -vo null
+END
+	exit 0
+fi
+export SJSTFILE="$1"
+shift
+if [ -d "$1" ]; then
+	exec mpv --input-ipc-server=~~/st.sock -shuffle -vo null "$@"
+else
+	exec mpv --input-ipc-server=~~/main.sock "$1"
+fi
