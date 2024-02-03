@@ -1,0 +1,119 @@
+#!/usr/bin/env python
+import os
+import sys
+import subprocess
+import time
+import calendar
+import json
+import argparse
+
+
+def get_video_info(filename):
+    subproc = subprocess.run(['ffprobe', '-of', 'json', '-show_entries', 'stream:format', filename], capture_output=True)
+    return json.loads(subproc.stdout)
+
+def vinfo_time_to_epoch(video_info):
+    ctime = time.strptime( video_info['streams'][0]['tags']['creation_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
+    return calendar.timegm(ctime)
+
+
+class Avidemux:
+    '''
+    Class to emulate avidemux, but in real, it just uses avidemux, and wrap all segment stuff into ffmpeg commands
+    Helps applying timestamp onto SJCam recorded videos, so can be used for gpx2video.
+    '''
+    videos = []
+    segments = 0
+
+    def __init__(self): pass
+
+    def loadVideo(self, filename):
+        video = get_video_info(filename)
+        video.setdefault('filename', filename)
+        if not args.sliceonly:
+            stime = vinfo_time_to_epoch(video)
+            stime += args.diff
+            video.setdefault('stime', stime)
+        self.videos.append(video)
+        return True
+
+    def appendVideo(self, filename):
+        return self.loadVideo(filename)
+        
+    def clearSegments(self): pass
+
+    def setHDRConfig(self, *args): pass
+
+    def audioSetDrc2(self, *args): pass
+
+    def audioSetEq(self, *args): pass
+
+    def audioSetChannelGains(self, *args): pass
+
+    def audioSetChannelDelays(self, *args): pass
+
+    def audioSetChannelRemap(self, *args): pass
+
+    def addSegment(self, vidno, startms, durms):
+        if args.prefix is None:
+            prefix = args.pyfile.name[:-3]
+        else:
+            prefix = args.prefix
+        newfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
+        if args.sliceonly:
+            print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+        else:
+            newstartts = self.videos[vidno]['stime'] + startms/1000000
+            newstart = time.strftime('%Y-%m-%dT%H:%M:%S.000000Z', time.gmtime(newstartts))
+            if args.diff_mode:
+                if os.path.exists(newfilename):
+                    slice_info = get_video_info(newfilename)
+                    slice_ctime = vinfo_time_to_epoch(slice_info)
+                    print(f'{newfilename} diff: {slice_ctime-newstartts}')
+                else:
+                    print(f'file doesn\'t exist: {newfilename}', file=sys.stderr)
+            else:
+                if args.sourcedir is None:
+                    print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+                else:
+                    sourcefile = os.path.join(args.sourcedir, newfilename)
+                    print(f"ffmpeg -i {sourcefile} -c copy -metadata 'creation_time={newstart}' {newfilename}")
+        self.segments += 1
+
+    def setPostProc(self, *argv, **kw): pass
+    def videoCodec(self, *argv, **kw): pass
+    def audioClearTracks(self, *argv, **kw): pass
+    def setSourceTrackLanguage(self, *argv, **kw) : pass
+    def audioTotalTracksCount(self, *argv, **kw) : return 1
+    def audioAddTrack(self, *argv, **kw) : pass
+    def audioCodec(self, *argv, **kw) : pass
+    def audioSetDrc(self, *argv, **kw) : pass
+    def audioSetShift(self, *argv, **kw) : pass
+    def setContainer(self, *argv, **kw) : pass
+
+
+parser = argparse.ArgumentParser(description='''Helps processing SJcam recordings:
+
+  This script adjusts SJCam recorded videos\' creation_time, and make it
+  usable for gpx2video.
+  The idea is simple: Start a project in avidemux, append the slices from your
+  sjcam recordings,than do the neccesery cuts. Export the project, which will
+  result a python code.
+  You run that python code with this script, which emulates a dummy Avidemux
+  class. The dummy class will print you ffmpeg commands, so that will result
+  new slices, what you can pass to gpx2video one by one, than concatenate.
+  What this script fixes: SJcam sets the end of the recording time as creation_time
+  while gpx2video assumes it\'s the start of the recording.
+  Since SJCam don\'t have a GPS clock, you might need to adjust the time with some
+  \'diff\' value, so the speed looks accurate on the resulted overlay.''', formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument('-d', '--diff', default=os.environ.get('SJDEMUX_DIFF', 0), type=float, help='Time diff to adjust the counted creation time')
+parser.add_argument('-D', '--diff-mode', action='store_true', help='Instead of printing the commands, it calculates what diff was provided earlier creating the files')
+parser.add_argument('-p', '--prefix', default=os.environ.get('SJDEMUX_PREFIX', None), help='Filename prefix for the resulting commands')
+parser.add_argument('-S', '--sourcedir', default=None, help='Source dir of pre-processed files')
+parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used for slices in the resulting commands')
+parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
+parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
+parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')
+args = parser.parse_args()
+exec(args.pyfile.read())
