@@ -38,7 +38,14 @@ class Avidemux:
         return True
 
     def appendVideo(self, filename):
-        return self.loadVideo(filename)
+        video = get_video_info(filename)
+        video.setdefault('filename', filename)
+        previous = self.videos[-1]
+        if not args.sliceonly:
+            stime = previous['stime'] + float(previous['streams'][0]['duration'])
+            video.setdefault('stime', stime)
+        self.videos.append(video)
+        return True
         
     def clearSegments(self): pass
 

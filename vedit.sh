@@ -1,6 +1,9 @@
 # The original original way, I've speed up the videos to 4 times faster
 # Though, this is already slightly modified, since the `-crf 0` part was not part of this step, nor the keyint.
 
+#ovlext=png
+ovlext=tiff
+
 speedup4o () {
 	orig="$1"
 	new="${orig%.*}s4.mp4"
@@ -171,7 +174,7 @@ sjrender () {
 sjrenderimg () {
 for i in wk/202*.mp4 ; do
 	fn="${i##*/}"
-	if [ -r wko/${fn%.mp4}-f0000.png ]; then
+	if [ -r wko/${fn%.mp4}-f0000.$ovlext ]; then
 		:
 	else
 		gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
@@ -189,7 +192,7 @@ addoverlay () {
 	origffn="${orig##*/}"
 	origfno="${origffn%.*}"
 	ffmpeg -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.png" \
+		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
 		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
 		-r 30 -map '[v]' -map '[a]' -c:v libx265 -crf 22 \
 		-ac 2 -ar 48000 \
@@ -218,7 +221,7 @@ addoverlays () {
 		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
 	ffmpeg -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.png" \
+		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
 		-filter_complex 'overlay' \
 		-r 7.5  -an -c:v libx265 -crf 22 \
 		-frames:v $[(vframes+3)/4] \
@@ -231,8 +234,18 @@ gentimesh () {
 	done >timediff.sh
 }
 
+gpgentimesh () {
+	for i in 202?_????_S?t.py ; do
+		gpdemux -d 0 $i ;
+	done >timediff.sh
+}
+
 telltimediffs () {
 	for i in 202?_????_S??.py ; do sjdemux -D $i ; done
+}
+
+tellgptimediffs () {
+	for i in 202?_????_S??.py ; do gpdemux -D $i ; done
 }
 
 renderallvideo () {
@@ -258,6 +271,22 @@ fixallvideo () {
 	done
 }
 
+fixallgpvideo () {
+	sourcedir="${PWD%?.*}.${PWD##*.}"
+	renderext="$1"
+	for i in ${sourcedir}/*.mp4 ; do
+		fn="${i##*/}"
+		destfn="${fn%.mp4}${renderext}a.mp4"
+		vidf="${fn%.mp4}${renderext}.mp4"
+		vduration=`ffprobe -of json -show_entries stream "$vidf" 2>/dev/null | jq '.streams[0].duration' | tr -d '"' `
+		if [ -r "$destfn" ] ; then
+			:
+		else
+			ffmpeg -i "$vidf" -i "$i" -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 -t $vduration "$destfn"
+		fi
+	done
+}
+
 concatall () {
 	renderext="$1"
 	ucrenderext="$( echo -n $renderext | tr a-z A-Z )"
@@ -266,7 +295,7 @@ concatall () {
 }
 
 cleanupallvids () {
-	rm *mp4 *png
+	rm *mp4 *png *tiff
 }
 
 vedithelp () {
