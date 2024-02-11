@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2024.02.11.
+* A first version of `gpdemux`, which is very similar to the sjdemux, except for the gopro videos. There are a few minor differences how the two should be handled.
+* First version of `gpscan`. Same idea here, what I had with sjscan.
+* vedit.sh was also updated, so now it has functions for gp-specific things
+* sjmpv now only needs one argument. Either the mp4 file, and than the soundtrack's text file name will be derived from that filename, or the dir for the soundtrack media. Because of this change, the alt-p will only work from the main player
+
 ## 2024.01.23
 * sjscan creates the destination directory if it wasn't pre-existing
 * Added stgen to generate a starting project for kdenlive. For documentation, see README.md

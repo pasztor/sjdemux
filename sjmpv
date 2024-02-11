@@ -4,12 +4,12 @@ if [ "$1" == "-h" ]; then
 sjmpv can be called with two different kind of way:
 
 Option #1:
-sjmpv soundtrack.txt mainfile.mp4
+sjmpv mainfile.mp4
 
 This way it will start the "main" player
 
 Option #2:
-sjmpv soundtrack.txt /soundtrack/directory
+sjmpv /soundtrack/directory
 
 This way it will start the "soundtrack" player
 
@@ -19,10 +19,11 @@ The difference between the main player and the soundtrack player, that:
 END
 	exit 0
 fi
-export SJSTFILE="$1"
-shift
 if [ -d "$1" ]; then
 	exec mpv --input-ipc-server=~~/st.sock -shuffle -vo null "$@"
 else
+	fn="${1%.mp4}"
+	fn="${fn%_??s4}"
+	export SJSTFILE="${fn}_soundtrack.txt"
 	exec mpv --input-ipc-server=~~/main.sock "$1"
 fi
