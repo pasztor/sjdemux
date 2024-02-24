@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2024.02.24.
+* Speed up editing by adding the LRV file to the avidemux project file, if all the MP4 files in the session have their LRV counterpart
+* Also, on the generation of the final result, the gpdemux must replace back the MP4 file in the generated ffmpeg commands
+
 ## 2024.02.11.
 * A first version of `gpdemux`, which is very similar to the sjdemux, except for the gopro videos. There are a few minor differences how the two should be handled.
 * First version of `gpscan`. Same idea here, what I had with sjscan.

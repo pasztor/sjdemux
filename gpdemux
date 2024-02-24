@@ -5,6 +5,7 @@ import subprocess
 import time
 import calendar
 import json
+import re
 import argparse
 
 
@@ -16,6 +17,15 @@ def vinfo_time_to_epoch(video_info):
     ctime = time.strptime( video_info['streams'][0]['tags']['creation_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
     return calendar.timegm(ctime)
 
+mre = re.compile('^GL(?P<n>\d{6}).LRV', re.I)
+
+def file_name_normalize(filename):
+    ret = filename
+    basename = os.path.basename(filename)
+    m = mre.match(basename)
+    if m:
+        ret = os.path.join( os.path.dirname(filename), f'GX{m.group("n")}.MP4' )
+    return ret
 
 class Avidemux:
     '''
@@ -28,8 +38,9 @@ class Avidemux:
     def __init__(self): pass
 
     def loadVideo(self, filename):
-        video = get_video_info(filename)
-        video.setdefault('filename', filename)
+        _filename = file_name_normalize(filename)
+        video = get_video_info(_filename)
+        video.setdefault('filename', _filename)
         if not args.sliceonly:
             stime = vinfo_time_to_epoch(video)
             stime += args.diff
@@ -38,8 +49,9 @@ class Avidemux:
         return True
 
     def appendVideo(self, filename):
-        video = get_video_info(filename)
-        video.setdefault('filename', filename)
+        _filename = file_name_normalize(filename)
+        video = get_video_info(_filename)
+        video.setdefault('filename', _filename)
         previous = self.videos[-1]
         if not args.sliceonly:
             stime = previous['stime'] + float(previous['streams'][0]['duration'])
