@@ -16,6 +16,8 @@ jobs:
       uses: actions/setup-node@v2
       with:
         node-version: 20.x
+    - name: Install ci
+      run: npm install ci
     - name: Install dependencies
       run: npx ci
     - name: Install semantic-release extra plugins
