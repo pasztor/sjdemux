@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2024.03.16.
+* Removed legacy code from vedit.sh
+* Where a function has an sjcam and a gopro specific version as well, the function name now consistently starts with either sj or gp
+* vedithelp function updated accordingly
+
 ## 2024.02.25.
 * gpscan won't fail just print the error when `creation_time` differs between the segments.
 

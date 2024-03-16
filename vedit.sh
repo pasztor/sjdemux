@@ -4,87 +4,6 @@
 #ovlext=png
 ovlext=tiff
 
-speedup4o () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -i "$orig" -filter_complex '[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]' -crf 0 -x264-params keyint=30 -map '[v]' -map '[a]' -ac 2 -ar 48000 "$new"
-}
-
-# The way I've did the speedup until recently, when the previous steps were this way:
-# 1. metadatafix
-# 2. gpx2video
-# 2/b. fix audio with replaceaudio: After the gpx2video step, the last few seconds in the sounds disappears from the resulted files, so I have to replace the
-#      audio channel of the resulted mp4 file with the original mp4 file's audio channel.
-# 3. speedup4
-# 4. avidemux editing (this is why the keyint is needed. Originally the raw mp4 files from the sjcam every 15th frame is a keyframe, so I could cut at every half second.
-#    But with the gpx2video in the line, the keyint was 250, which meant a bit more than 8 seconds between the keyframes, so I tried to compensate this way.
-#    But this also wasn't optimal, since this resulted 100+ Gig temporary files.
-# 5. smooth30fps
-# 6. concat - Because of the large temporary files, I had to process the ride in segments, and do the editing work on the segments. Once I was done with a segment
-#    I've deleted the temporary files, and could move to the next segment. (I only have a 1TB nvme ssd in my PN50) And finally, I've could concatenate the segments.
-# 7. addsoundtrack
-
-speedup4 () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -i "$orig" -filter_complex '[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]' -r 120 -crf 0 -x264-params keyint=30 -map '[v]' -map '[a]' -ac 2 -ar 48000 "$new"
-}
-
-
-# The speedup4gp is the go-pro version of the speedup4o command. The reason is, the SJcam creates 30fps videos, the GoPro creates 29.97 fps videos.
-
-speedup4gp () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -i "$orig" -filter_complex '[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]' -r 119.88 -crf 0 -x264-params keyint=30 -map '[v]' -map '[a]' "$new"
-}
-
-# One of the ideas to improve the processing was to make the speedup and the smoothening in one step.
-# For this, I have to do the avidemux cut part first.
-# In order to do that, I have to have the gazillion little mp4 chunks (called segments in the avidemux .py scripts) with fixed metadata
-# That's why I have the sjdemux command. The improved way:
-# 1. avidemux (I still do segments, since the camera's datetime could be different after a battery replacement, which needs a the -d parameter
-#    to be adjusted in the sjdemux command
-# 2. sjdemux to fix the metadata
-# 3. gpx2video
-# 3/b. replaceaudio (to fix the gpx2video's result's audio channel)
-# 4. speedup4i
-# 5. concatvideo
-# 6. addsoundtrack
-
-speedup4i () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -i "$orig" -filter_complex "[0:v]setpts=0.25*PTS,minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=30'[v];[0:a]atempo=4[a]" -crf 18 -map '[v]' -map '[a]' -ac 2 -ar 48000 "$new"
-}
-
-# Another idea to improve the processing was to leave out the interpolate filter, just like it was in the old ways, BUT
-# This time I also use the -crf parameter, making sure the resulting video quality is good enough.
-# I called this speedup4q, because it's much quicker than the speedup4 or the speedup4i approach.
-# This way, the processing means the following:
-# 1. avidemux To get the .py files
-# 2. sjdemux To get the gazillion .mp4 files with their metadata fixed
-# 3. gpx2video
-# 3/b. replaceaudio (to fix the gpx2video's result's audio channel)
-# 4. seedup4q
-# 5. concatvideo
-# 6. addsoundtrack
-
-speedup4q () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -i "$orig" -filter_complex "[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]" -r 30 -crf 18 -map '[v]' -map '[a]' -ac 2 -ar 48000 "$new"
-}
-
-speedup4raw () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	tempfile=raw.h264
-	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v h264_mp4toannexb "$tempfile"
-	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -movflags -faststart "$new"
-	rm "$tempfile"
-}
-
 speedup4raw265af () {
 	orig="$1"
 	new="${orig%.*}s4.mp4"
@@ -92,22 +11,6 @@ speedup4raw265af () {
 	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v hevc_mp4toannexb "$tempfile"
 	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -ar 48000 -ac 2 -movflags -faststart "$new"
 	rm "$tempfile"
-}
-
-# Originally, when the speedup resulted a 120 or 119.88 fps video, I've smoothened it down to only 60fps. But YouTube tries to fit the videos into a certain bandwidth.
-# If the bandwith is the same, but you have 60fps video, that means, you have half the amount of data to store information about a frame compared to a 30fps video.
-# So, finally, I've decided to upload 30fps videos to youtube.
-
-smooth60fps () {
-	orig="$1"
-	new="${orig%.mp4}s60.mp4"
-	ffmpeg -i "$orig" -c:a copy -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=60'" -crf 18 "$new"
-}
-
-smooth30fps () {
-	orig="$1"
-	new="${orig%.mp4}s30.mp4"
-	ffmpeg -i "$orig" -c:a copy -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=30'" -crf 18 "$new"
 }
 
 addsoundtrack () {
@@ -228,7 +131,7 @@ addoverlays () {
 		"${origfno}${ovl}.mp4"
 }
 
-gentimesh () {
+sjgentimesh () {
 	for i in 202?_????_S?t.py ; do
 		sjdemux -d 0 $i ;
 	done >timediff.sh
@@ -240,11 +143,11 @@ gpgentimesh () {
 	done >timediff.sh
 }
 
-telltimediffs () {
+sjtelltimediffs () {
 	for i in 202?_????_S??.py ; do sjdemux -D $i ; done
 }
 
-tellgptimediffs () {
+gptelltimediffs () {
 	for i in 202?_????_S??.py ; do gpdemux -D $i ; done
 }
 
@@ -258,7 +161,7 @@ renderallvideo () {
 	done
 }
 
-fixallvideo () {
+sjfixallvideo () {
 	sourcedir="${PWD%?.*}.${PWD##*.}"
 	renderext="$1"
 	for i in ${sourcedir}/*.mp4 ; do
@@ -271,7 +174,7 @@ fixallvideo () {
 	done
 }
 
-fixallgpvideo () {
+gpfixallvideo () {
 	sourcedir="${PWD%?.*}.${PWD##*.}"
 	renderext="$1"
 	for i in ${sourcedir}/*.mp4 ; do
@@ -300,39 +203,37 @@ cleanupallvids () {
 
 vedithelp () {
 	cat <<END
-gentimesh
-	# generates timediff.sh
+# generates timediff.sh
+[ sjgentimesh | gpgentimesh ]
+
+# Generates the timeing files
 . timediff.sh
-	# Generates the timeing files
+
+# Update the timestamp to the time in the clock on the video
 vim timediff.sh
-	# Update the timestamp to the time in the clock on the video
+
+# Rerun timediff.sh
 . timediff.sh
-	# To gneerate it again
-telltimediffs
-	# To find out the differences
-echo 'for i in 0 1 2 ; do . <( sjdemux -d -00 1970_0101_S0n.py | head -1 )' >>work.sh
-	# Create work.sh, update the i, the diff (-d) and the date accordingly
+
+# To find out the differences
+[ sjtelltimediffs | gptelltimediffs ]
+
+# Create work.sh, update the i's, the diff (-d) and the date accordingly
+echo 'for i in 0 1 2 ; do . <( sjdemux -d -XX 1970_0101_S0n.py )' >>work.sh
+echo 'for i in 0 1 2 ; do . <( gpdemux -d -XX 1970_0101_S0n.py )' >>work.sh
+
+# Generate the of videos
 . work.sh
-	# Generate the first set of videos
-	#### Now, run this in the gpx2video build dir:
+
+#### Now, run these in the gpx2video build dir:
+# The example sjrenderimg function uses the "f" renderext.
+# Now go to the wko dir:
 sjrenderimg
-	# The example sjrenderimg function uses the "f" renderext.
-	# Now go to the wko dir:
+
+# Now go to your "wko" directory:
 renderallvideo f
-fixallvideo f
-	# Now check the result, if camera recorded clock was accurate to gps clock.
-	# If not, adjust all diff in work.sh accordingly in wk dir.
-	# Once that's done, remoeve the '| head -1' parts from the fwork.sh
-	#
-	# Now back to wk:
-cleanupallvids
-. work.sh
-	# Do a cleanupallvids in wko too
-	# Now go to the gpx2video build dir
-sjrenderimg
-	# Back to wko:
-renderallvideo f
-fixallvideo f
+[ sjfixallvideo f | gpfixallvideo f ]
+
 concatall f
 speedup4raw265af 1970_0101_FN.mp4
 addsoundtrack 1970_0101_FNs4.mp4 *mka
