@@ -159,7 +159,10 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
             self.__prefix = f'{t.tm_year}_{t.tm_mon:02}{t.tm_mday:02}'
         self.__sessions.setdefault(m, {'ctime': t, 'files': [] })
         self.__sessions[m]['files'].append(video_info)
-        assert self.__sessions[m]['ctime'] == t, 'ctime mismatch between the same gopro sessions, need to investigate'
+        try:
+            assert self.__sessions[m]['ctime'] == t, 'ctime mismatch between the same gopro sessions, need to investigate'
+        except AssertionError as e:
+            print(f'{e}\nsession ctime: {self.__sessions[m]["ctime"]}\nt: {t}\nfilename: {filename}')
 
     def gpxflush(self):
         gpxlogs = [ i for i in os.listdir(self.__dirname) if i.endswith('.gpx') ]

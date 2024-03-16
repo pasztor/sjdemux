@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2024.02.25.
+* gpscan won't fail just print the error when `creation_time` differs between the segments.
+
 ## 2024.02.24.
 * Speed up editing by adding the LRV file to the avidemux project file, if all the MP4 files in the session have their LRV counterpart
 * Also, on the generation of the final result, the gpdemux must replace back the MP4 file in the generated ffmpeg commands
