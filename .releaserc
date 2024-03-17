@@ -6,8 +6,12 @@ plugins:
       - message: '*'
         release: patch
   - "@semantic-release/release-notes-generator"
-  - - "@semantic-release/changelog"
-    - changelogFile: CHANGELOG.md
   - "@semantic-release/git"
-  - "@semantic-release/github"
-
+  - - "@semantic-release/github"
+    - assets:
+      - path:
+        - '*'
+        - '!packages.json'
+        - '!packages-lock.json'
+        name: Source code
+        label: 'Release ${nextRelease.version}'
