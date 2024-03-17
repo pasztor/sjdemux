@@ -7,5 +7,5 @@ plugins:
         release: patch
   - "@semantic-release/release-notes-generator"
   - - "@semantic-release/git"
-    - assets: false
+    - assets: []
   - "@semantic-release/github"
