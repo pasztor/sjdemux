@@ -6,12 +6,6 @@ plugins:
       - message: '*'
         release: patch
   - "@semantic-release/release-notes-generator"
-  - "@semantic-release/git"
-  - - "@semantic-release/github"
-    - assets:
-      - path:
-        - '*'
-        - '!packages.json'
-        - '!packages-lock.json'
-        name: Source code
-        label: 'Release ${nextRelease.version}'
+  - - "@semantic-release/git"
+    - assets: false
+  - "@semantic-release/github"
