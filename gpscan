@@ -86,6 +86,7 @@ class RecSessions:
         self.__gpxdiff = gpxdiff
         self.__sessions = {}
         self.__dirname = dirname
+        self.__flatsessions = []
         jenv = jinja2.Environment()
         jenv.filters['lnorm'] = lambda x: str(round(x*1000)*1000)
         self.__template = jenv.from_string('''#PY  <- Needed to identify #
@@ -140,12 +141,15 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
                 self.__sessions[sid]['files'][i]['file'] = lrvfiles[i]
         with open(outfilename, 'w') as outfile:
             outfile.write(self.__template.render(files=self.__sessions[sid]['files'], full_length=self.__sessions[sid]['length']))
+        self.__flatsessions.append(session)
 
     def flush(self):
         args.trace and print('flush:\n' + json.dumps(self.__sessions, indent=2))
         if len(self.__sessions) > 0:
             for i in self.__sessions:
                 self.__render(i)
+        for i in range(len(self.__flatsessions)):
+            assert self.__flatsessions[i]['sno'] == i, 'flat sessionss index are the same as the sno in the session data'
 
     def addfile(self, filename):
         full_filename = os.path.join(self.__dirname, filename)
@@ -170,15 +174,17 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
         # Copy the sessions data into the local gpxranges var.
         #for fi in self.__sessions:
         #    gpxranges.append(dict(fi))
-        gpxranges = self.__sessions
+        gpxranges = self.__flatsessions
         # Go through the ranges of sessions to join, and for every session in between
         for i in self.__gpxjoins:
             for j in range(i[0], i[1]+1):
+                print(f'Debug:\ni: {i}\nj: {j}\ngpxjoins: {self.__gpxjoins}\n')
+                print(json.dumps(gpxranges, indent=2))
                 gpxranges[j]['start_time']=gpxranges[i[0]]['start_time']
                 gpxranges[j]['stop_time']=gpxranges[i[1]]['stop_time']
         tre = re.compile('.*<trkpt.*<time>(?P<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)</time>.*')
         args.trace and print(f'gpxranges:\n' + json.dumps(gpxranges, indent=2))
-        for __i, i in gpxranges.items():
+        for i in gpxranges:
             # gpxlog uses the following file name pattern: "YYYYmmdd-HHMMss - TRACKNAME.gpx"
             # For me: One day, one gpx file, so it's enough to match only on the day.
             # Than let the sjscan do the splitting it into sessions, but join them where I
