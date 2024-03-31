@@ -34,6 +34,12 @@ class Avidemux:
     '''
     videos = []
     segments = 0
+    concatbuffer = {
+            'files': [],
+            'inputfile': None,
+            'outputfile': None,
+            'creation_time': None
+            }
 
     def __init__(self): pass
 
@@ -59,19 +65,52 @@ class Avidemux:
         self.videos.append(video)
         return True
         
-    def clearSegments(self): pass
 
-    def setHDRConfig(self, *args): pass
+    def flushConcatBuffer(self):
+        inputfile = self.concatbuffer['inputfile']
+        outputfile = self.concatbuffer['outputfile']
+        creation_time = self.concatbuffer['creation_time']
+        if inputfile is not None:
+            #print(f'Debug flushing: concatbuffer: {self.concatbuffer}', file=sys.stderr)
+            with open(inputfile, 'w') as winputfile:
+                for cinfile in self.concatbuffer['files']:
+                    cinfilename = cinfile['filename']
+                    winputfile.write(f"file '{cinfilename}\n")
+                    for k in cinfile.keys():
+                        if k != 'filename':
+                            winputfile.write(f'{k} {cinfile[k]}\n')
+            print(f"ffmpeg -f concat -safe 0 -i {inputfile} -c copy -metadta 'creation_time={creation_time}' {outputfile}")
+        self.concatbuffer['inputfile'] = None
+        self.concatbuffer['files'] = []
+        self.concatbuffer['outfile'] = None
 
-    def audioSetDrc2(self, *args): pass
 
-    def audioSetEq(self, *args): pass
+    def initConcatBuffer(self, filename, startms, creation_time):
+        self.flushConcatBuffer()
+        if args.prefix is None:
+            prefix = args.pyfile.name[:-3]
+        else:
+            prefix = args.prefix
+        self.concatbuffer['outputfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
+        self.concatbuffer['inputfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.input.txt'
+        self.concatbuffer['files'] = [ {'filename': filename, 'inpoint': str(float(startms/1000000))} ]
+        self.concatbuffer['creation_time'] = creation_time
+        #print(f'debug: initConcatBuffer: filename: {filename}, startms: {startms}, creation_time: {creation_time}, concatbuffer: {self.concatbuffer}', file=sys.stderr)
+        #print(f'debug: initConcatBuffer: concatbuffer: {self.concatbuffer}', file=sys.stderr)
+        self.segments -= 1
 
-    def audioSetChannelGains(self, *args): pass
 
-    def audioSetChannelDelays(self, *args): pass
+    def appendConcatBuffer(self, filename, durms):
+        newentry = dict()
+        newentry.setdefault('filename', filename)
+        if durms is None:
+            self.segments -= 1
+        else:
+            newentry.setdefault('outpoint', str(float(durms/1000000)))
+        self.concatbuffer['files'].append(newentry)
 
-    def audioSetChannelRemap(self, *args): pass
+    def isConcatBufferStarted(self):
+        return self.concatbuffer['inputfile'] is not None
 
     def addSegment(self, vidno, startms, durms):
         if args.prefix is None:
@@ -93,14 +132,34 @@ class Avidemux:
                     print(f'file doesn\'t exist: {newfilename}', file=sys.stderr)
             else:
                 if args.sourcedir is None:
-                    print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+                    # If Segment ends on camera segment's end:
+                    if float(self.videos[vidno]['streams'][0]['duration']) == float((startms + durms)/1000000) :
+                        self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart)
+                        #print(f'# {newfilename} ends on file, maybe need to append with next segment', file=sys.stderr)
+                    # If Segments starts on camera segment, might need to append to concatbuffer
+                    elif startms == 0 and self.isConcatBufferStarted():
+                        if float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000):
+                            adurms = None
+                        else:
+                            adurms = durms
+                        self.appendConcatBuffer(self.videos[vidno]['filename'], adurms)
+                    else:
+                        self.flushConcatBuffer()
+                        print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
                 else:
                     sourcefile = os.path.join(args.sourcedir, newfilename)
                     print(f"ffmpeg -i {sourcefile} -c copy -metadata 'creation_time={newstart}' {newfilename}")
         self.segments += 1
 
+    def clearSegments(self): pass
+    def setHDRConfig(self, *args): pass
+    def audioSetDrc2(self, *args): pass
+    def audioSetEq(self, *args): pass
+    def audioSetChannelGains(self, *args): pass
+    def audioSetChannelDelays(self, *args): pass
+    def audioSetChannelRemap(self, *args): pass
     def setPostProc(self, *argv, **kw): pass
-    def videoCodec(self, *argv, **kw): pass
+    def videoCodec(self, *argv, **kw): self.flushConcatBuffer()
     def audioClearTracks(self, *argv, **kw): pass
     def setSourceTrackLanguage(self, *argv, **kw) : pass
     def audioTotalTracksCount(self, *argv, **kw) : return 1

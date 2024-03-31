@@ -1,6 +1,37 @@
 # The original original way, I've speed up the videos to 4 times faster
 # Though, this is already slightly modified, since the `-crf 0` part was not part of this step, nor the keyint.
 
+# Note to self:
+# Working hwaccel video encode cmdline:
+# ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi -i input.mp4 -c:v hevc_vaapi -c:a copy -crf 23 output.mp4
+#encode_options="-hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi"
+
+hwaccel () {
+	encode_options="-vaapi_device /dev/dri/renderD128"
+	output_codec="hevc_vaapi"
+	post_overlay_filter=",format=yuv420p,hwupload,scale_vaapi=format=nv12"
+	quality_param="-qp 22"
+}
+
+nohwaccel () {
+	encode_options=""
+	output_codec=libx265
+	post_overlay_filter=""
+	quality_param="-crf 22"
+}
+
+hwaccel
+
+# Timing comparison for hwaccel encode of a slice:
+# real	1m54.532s
+# user	20m37.154s
+# sys	0m15.613s
+# 
+# Same file encodced with nohwaccel:
+# real	6m1.411s
+# user	89m28.432s
+# sys	0m10.091s
+
 #ovlext=png
 ovlext=tiff
 
@@ -123,12 +154,12 @@ addoverlays () {
 		#-frames:a $aframes -frames:v $[(vframes+3)/4] \
 		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
-	ffmpeg -i "$orig" \
+	time ffmpeg $encode_options -i "$orig" \
 		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-		-filter_complex 'overlay' \
-		-r 7.5  -an -c:v libx265 -crf 22 \
-		-frames:v $[(vframes+3)/4] \
+		-filter_complex "overlay${post_overlay_filter}" \
+		-r 7.5  -an -c:v $output_codec $quality_param \
 		"${origfno}${ovl}.mp4"
+		#-frames:v $[(vframes+3)/4] \
 }
 
 sjgentimesh () {

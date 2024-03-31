@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2024.03.30.
+* hw accelerated encoding: by default the render will now encode the video using hardware accelerated video encode
+* Earlier, I found that some frames were missing from the result on the border of the GoPro camera segments. Now that problem is even worse with the hw accelerated render, since that leaves out a few extra more frames from the end of the video. For that, I implemented a workaround in the gpdemux script, so it will concatenate the videos which are on segment borders
+
 ## 2024.03.16.
 * Removed legacy code from vedit.sh
 * Where a function has an sjcam and a gopro specific version as well, the function name now consistently starts with either sj or gp
