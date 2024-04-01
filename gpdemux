@@ -79,7 +79,7 @@ class Avidemux:
                     for k in cinfile.keys():
                         if k != 'filename':
                             winputfile.write(f'{k} {cinfile[k]}\n')
-            print(f"ffmpeg -f concat -safe 0 -i {inputfile} -c copy -metadta 'creation_time={creation_time}' {outputfile}")
+            print(f"ffmpeg -f concat -safe 0 -i {inputfile} -c copy -metadata 'creation_time={creation_time}' {outputfile}")
         self.concatbuffer['inputfile'] = None
         self.concatbuffer['files'] = []
         self.concatbuffer['outfile'] = None
