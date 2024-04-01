@@ -9,15 +9,36 @@
 hwaccel () {
 	encode_options="-vaapi_device /dev/dri/renderD128"
 	output_codec="hevc_vaapi"
-	post_overlay_filter=",format=yuv420p,hwupload,scale_vaapi=format=nv12"
+	post_overlay_filter=",setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=format=nv12"
+	pre_overlay_filter=""
 	quality_param="-qp 22"
+	outfr=origfr
+	#amap='-map [v] -map [a] -ac 2 -ar 48000'
+	amap='-an'
 }
 
 nohwaccel () {
 	encode_options=""
 	output_codec=libx265
 	post_overlay_filter=""
+	pre_overlay_filter=""
 	quality_param="-crf 22"
+	outfr=7.5
+	amap='-an'
+}
+
+# Highly experimental. Not working yet.
+# Just for testing the ideas, I've got on ffmpeg-users from Chen, Wenbin
+#
+fhwaccel () {
+	encode_options="-hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi"
+	#encode_options="$encode_options -vaapi_device /dev/dri/renderD128"
+	output_codec="hevc_vaapi"
+	pre_overlay_filter="[0:v]hwdownload[0v];[0v][1:v]"
+	post_overlay_filter=",format=yuv420p,hwupload,scale_vaapi=format=nv12"
+	quality_param="-qp 22"
+	outfr=7.5
+	amap='-an'
 }
 
 hwaccel
@@ -42,6 +63,17 @@ speedup4raw265af () {
 	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v hevc_mp4toannexb "$tempfile"
 	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -ar 48000 -ac 2 -movflags -faststart "$new"
 	rm "$tempfile"
+}
+
+speedup4hw256re () {
+	orig="$1"
+	new="${orig%.*}s4.mp4"
+	ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi \
+		-i "$orig" \
+		-filter_complex '[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
+		-map '[v]' -map '[a]' \
+		-r 30 -c:v hevc_vaapi -qp 22 "$new"
+	#ffmpeg -vaapi_device /dev/dri/renderD128 -i "$orig" -filter_complex '[0:v]setpts=0.25*PTS,hwupload,scale_vaapi=format=nv12[v];[0:a]atempo=4[a]' -r 30 -map '[v]' -map '[a]' -c:v hevc_vaapi -qp 22 "$new"
 }
 
 addsoundtrack () {
@@ -151,15 +183,22 @@ addoverlays () {
 	origfno="${origffn%.*}"
 	vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
 	aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
+	origfr=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].r_frame_rate' | tr -d '"' `
 		#-frames:a $aframes -frames:v $[(vframes+3)/4] \
 		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
+		#-frames:v $[(vframes+3)/4] \
+	[ "$outfr" = 'origfr' ] && outfr="$origfr"
+	echo ffmpeg $encode_options -i "$orig" \
+		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
+		-filter_complex "${pre_overlay_filter}overlay${post_overlay_filter}" \
+		-r ${outfr}  $amap -c:v $output_codec $quality_param \
+		"${origfno}${ovl}.mp4"
 	time ffmpeg $encode_options -i "$orig" \
 		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-		-filter_complex "overlay${post_overlay_filter}" \
-		-r 7.5  -an -c:v $output_codec $quality_param \
+		-filter_complex "${pre_overlay_filter}overlay${post_overlay_filter}" \
+		-r ${outfr}  $amap -c:v $output_codec $quality_param \
 		"${origfno}${ovl}.mp4"
-		#-frames:v $[(vframes+3)/4] \
 }
 
 sjgentimesh () {
@@ -221,6 +260,22 @@ gpfixallvideo () {
 	done
 }
 
+ngpfixallvideo () {
+	sourcedir="${PWD%?.*}.${PWD##*.}"
+	renderext="$1"
+	for i in ${sourcedir}/*.mp4 ; do
+		fn="${i##*/}"
+		destfn="${fn%.mp4}${renderext}a.mp4"
+		vidf="${fn%.mp4}${renderext}.mp4"
+		vduration=`ffprobe -of json -show_entries stream "$vidf" 2>/dev/null | jq '.streams[0].duration' | tr -d '"' `
+		if [ -r "$destfn" ] ; then
+			:
+		else
+			ffmpeg -i "$vidf" -i "$i" -c:v copy -map 0:v:0 -af atempo=4 -map 1:a:0 -t $vduration "$destfn"
+		fi
+	done
+}
+
 concatall () {
 	renderext="$1"
 	ucrenderext="$( echo -n $renderext | tr a-z A-Z )"
@@ -263,10 +318,10 @@ sjrenderimg
 
 # Now go to your "wko" directory:
 renderallvideo f
-[ sjfixallvideo f | gpfixallvideo f ]
+[ sjfixallvideo f | gpfixallvideo f | ngpfixallvideo f ]
 
 concatall f
-speedup4raw265af 1970_0101_FN.mp4
+speedup4raw265af 1970_0101_FN.mp4 # Skip this with hwaccel generated defaults
 addsoundtrack 1970_0101_FNs4.mp4 *mka
 END
 }

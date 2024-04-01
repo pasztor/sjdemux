@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2023.04.01.
+* speedup4hw256re shell function, to speed up the video 4 times faster, but using hw re-encoding. This is just for test. Deprecated, since it reencodes the video stream without doing any useful touch on it, which leads quality decrease. That's 
+* hwaccel settings changed: now it does the speed up to 4 times faster, and keeps the original framerate
+* ngpfixallvideo shell function to add back the soundtrack to the videos, but it takes into consideration, that the video stream is already 4 times faster, so the audio needs to be speed up as well, not just verbatim copy of the frames. Hence, after the concatall f command, you have a final result, you don't need one more step.
+
 ## 2024.03.30.
 * hw accelerated encoding: by default the render will now encode the video using hardware accelerated video encode
 * Earlier, I found that some frames were missing from the result on the border of the GoPro camera segments. Now that problem is even worse with the hw accelerated render, since that leaves out a few extra more frames from the end of the video. For that, I implemented a workaround in the gpdemux script, so it will concatenate the videos which are on segment borders
