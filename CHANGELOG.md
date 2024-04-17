@@ -1,6 +1,13 @@
 # CHANGELOG
 
-## 2023.04.01.
+## 2024.04.17.
+* Maybe gopro firmware update changed, but the timestamp in the gopro is gmt, so the Z at the and of the iso8601 timestamp is accurate, but for some reason, gpx2video expects that to be localtime, no matter what is the GMT offset is telling. But the GPX file is still has GMT timestamps. Solution: gpdemux now applies the current timezone's offset to the generated ffmpeg commands.
+* sjmpv wrapper takes into consideration, that a file name might reflects that there was no a separate speedup4raw stage
+* vedit.sh vedithelp updates
+* vedit.sh more verbose on origfr extraction
+* vedit.sh nohwaspeedup presets: similar result what you would get with hardware accelerated encoding, but without the hardware acceleration: do the speedup during the encoding phase. Both might need further finetunes. Cuts seems to edgy. With recode first to smaller (expected/4) framerate, the end-result looked more smooth earlier.
+
+## 2024.04.01.
 * speedup4hw256re shell function, to speed up the video 4 times faster, but using hw re-encoding. This is just for test. Deprecated, since it reencodes the video stream without doing any useful touch on it, which leads quality decrease. That's 
 * hwaccel settings changed: now it does the speed up to 4 times faster, and keeps the original framerate
 * ngpfixallvideo shell function to add back the soundtrack to the videos, but it takes into consideration, that the video stream is already 4 times faster, so the audio needs to be speed up as well, not just verbatim copy of the frames. Hence, after the concatall f command, you have a final result, you don't need one more step.

@@ -24,6 +24,7 @@ if [ -d "$1" ]; then
 else
 	fn="${1%.mp4}"
 	fn="${fn%_??s4}"
+	fn="${fn%_?N}"
 	export SJSTFILE="${fn}_soundtrack.txt"
 	exec mpv --input-ipc-server=~~/main.sock "$1"
 fi

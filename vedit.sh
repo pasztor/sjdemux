@@ -27,6 +27,16 @@ nohwaccel () {
 	amap='-an'
 }
 
+nohwaspeedup () {
+	encode_options=""
+	output_codec=libx265
+	post_overlay_filter=",setpts=0.25*PTS"
+	pre_overlay_filter=""
+	quality_param="-crf 22"
+	outfr=origfr
+	amap='-an'
+}
+
 # Highly experimental. Not working yet.
 # Just for testing the ideas, I've got on ffmpeg-users from Chen, Wenbin
 #
@@ -183,6 +193,7 @@ addoverlays () {
 	origfno="${origffn%.*}"
 	vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
 	aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
+	echo orgfr cmd: ffprobe -of json -show_entries stream "$orig" 2>/dev/null \| jq '.streams[0].r_frame_rate' \| tr -d '"'
 	origfr=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].r_frame_rate' | tr -d '"' `
 		#-frames:a $aframes -frames:v $[(vframes+3)/4] \
 		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
@@ -322,6 +333,10 @@ renderallvideo f
 
 concatall f
 speedup4raw265af 1970_0101_FN.mp4 # Skip this with hwaccel generated defaults
+sjmpv 1970_0101_??.mp4 & sjmpv /path/to/your/soundtrack/dir
+sjstgen 1970_0101_??.mp4 1970_0101_soundtrack.txt
+# here comes the soundtrack composition work in kdenlive
 addsoundtrack 1970_0101_FNs4.mp4 *mka
+sjplaylist *kdenlive >>1970_0101_description.txt
 END
 }

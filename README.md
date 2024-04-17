@@ -1,5 +1,5 @@
 # sjdemux
-SJCam &amp; Avidemux related things
+SJCam/GoPro &amp; Avidemux related things
 
 ## Overview
 Open your SJCam recordings in avidemux.
@@ -17,6 +17,7 @@ That python script will be the input of this script.
 * ffmpeg
 * avidemux
 * python
+* kdenlive
 
 Suggested:
 

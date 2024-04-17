@@ -122,7 +122,7 @@ class Avidemux:
             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -ss {startms/1000000} -t {durms/1000000} {newfilename}")
         else:
             newstartts = self.videos[vidno]['stime'] + startms/1000000
-            newstart = time.strftime('%Y-%m-%dT%H:%M:%S.000000Z', time.gmtime(newstartts))
+            newstart = time.strftime('%Y-%m-%dT%H:%M:%S.000000Z', time.localtime(newstartts))
             if args.diff_mode:
                 if os.path.exists(newfilename):
                     slice_info = get_video_info(newfilename)
@@ -151,7 +151,11 @@ class Avidemux:
                     print(f"ffmpeg -i {sourcefile} -c copy -metadata 'creation_time={newstart}' {newfilename}")
         self.segments += 1
 
-    def clearSegments(self): pass
+    def clearSegments(self):
+        if 'SJTZ' in os.environ:
+            os.environ['TZ'] = os.environ['SJTZ']
+            time.tzset()
+
     def setHDRConfig(self, *args): pass
     def audioSetDrc2(self, *args): pass
     def audioSetEq(self, *args): pass
