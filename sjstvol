@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+import os
+import socket
+import math
+import json
+import sys
+
+st_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+st_sock.connect((os.path.join(os.environ['HOME'], '.config/mpv/st.sock')))
+
+def get_property(socket, property):
+	rid = os.getpid()
+	request = {
+		'command': ['get_property', property],
+		'request_id': rid
+		}
+	socket.send(bytes(json.dumps(request) + '\n', 'ascii'))
+	recv = socket.recv(4096)
+	ret = None
+	for line in recv.decode().split('\n'):
+		try:
+			res = json.loads(line)
+			if res['request_id'] == rid:
+				if res['error'] == 'success':
+					ret = res['data']
+				else:
+					ret = res
+		except json.decoder.JSONDecodeError:
+			pass
+	return ret
+
+def set_property(socket, property, value):
+	rid = os.getpid()
+	request = {
+		'command': ['set_property', property, value],
+		'request_id': rid
+		}
+	socket.send(bytes(json.dumps(request) + '\n', 'ascii'))
+	recv = socket.recv(4096)
+	return recv
+
+stvol = get_property(st_sock, 'volume')
+
+print( set_property( st_sock, 'volume', int(stvol) + int(sys.argv[1]) ))
+st_sock.close()

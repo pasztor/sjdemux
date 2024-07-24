@@ -6,15 +6,45 @@
 # ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi -i input.mp4 -c:v hevc_vaapi -c:a copy -crf 23 output.mp4
 #encode_options="-hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi"
 
+defaults () {
+	d_speedup=4
+	d_ac=2
+	d_ar=48000
+	d_ovlext=tiff
+}
+
 hwaccel () {
-	encode_options="-vaapi_device /dev/dri/renderD128"
+	declare -a encode_options=( "-vaapi_device" "/dev/dri/renderD128" )
 	output_codec="hevc_vaapi"
 	post_overlay_filter=",setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=format=nv12"
+	#pre_overlay_filter="[0:v]fps=@rfr[0v];[0v][1:v]"
 	pre_overlay_filter=""
 	quality_param="-qp 22"
 	outfr=origfr
+	#outfr=''
 	#amap='-map [v] -map [a] -ac 2 -ar 48000'
 	amap='-an'
+}
+
+hwaccelng () {
+	encode_options=( "-vaapi_device" "/dev/dri/renderD128" )
+	output_codec=( "-c:v" "hevc_vaapi" )
+	post_overlay_filter=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=format=nv12" )
+	#pre_overlay_filter="[0:v]fps=@rfr[0v];[0v][1:v]"
+	#post_overlay_filter+=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=format=nv12" )
+	pre_overlay_filter='[0:v]select=not(mod(n\,4))[0v]'
+	d_overlay_filter_input='0v'
+	#pre_overlay_filter+=( 'select=not(mod(n\,@sup@))' )
+	quality_param=( "-qp" "22" )
+	overlay_filter='overlay'
+	outfr=origfr
+	#outfr=''
+	#amap='-map [v] -map [a] -ac 2 -ar 48000'
+	#amap='-an'
+	duration_params=( '-frames:v' '@outvframes@' '-t' '@outduration@' )
+	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
+	audio_map=( "-map" "[a]" '-ac' "$d_ac" "-ar" "$d_ar" )
+	fnsuffix='a'
 }
 
 nohwaccel () {
@@ -23,7 +53,7 @@ nohwaccel () {
 	post_overlay_filter=""
 	pre_overlay_filter=""
 	quality_param="-crf 22"
-	outfr=7.5
+	outfr='-r 7.5'
 	amap='-an'
 }
 
@@ -47,11 +77,12 @@ fhwaccel () {
 	pre_overlay_filter="[0:v]hwdownload[0v];[0v][1:v]"
 	post_overlay_filter=",format=yuv420p,hwupload,scale_vaapi=format=nv12"
 	quality_param="-qp 22"
-	outfr=7.5
+	outfr='-r 7.5'
 	amap='-an'
 }
 
-hwaccel
+defaults
+hwaccelng
 
 # Timing comparison for hwaccel encode of a slice:
 # real	1m54.532s
@@ -64,7 +95,6 @@ hwaccel
 # sys	0m10.091s
 
 #ovlext=png
-ovlext=tiff
 
 speedup4raw265af () {
 	orig="$1"
@@ -75,7 +105,7 @@ speedup4raw265af () {
 	rm "$tempfile"
 }
 
-speedup4hw256re () {
+speedup4hw265re () {
 	orig="$1"
 	new="${orig%.*}s4.mp4"
 	ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi \
@@ -150,7 +180,7 @@ sjrender () {
 sjrenderimg () {
 for i in wk/202*.mp4 ; do
 	fn="${i##*/}"
-	if [ -r wko/${fn%.mp4}-f0000.$ovlext ]; then
+	if [ -r wko/${fn%.mp4}-f0000.$d_ovlext ]; then
 		:
 	else
 		gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
@@ -168,7 +198,7 @@ addoverlay () {
 	origffn="${orig##*/}"
 	origfno="${origffn%.*}"
 	ffmpeg -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
+		-r 1 -i "${origfno}-${ovl}%04d.$d_ovlext" \
 		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
 		-r 30 -map '[v]' -map '[a]' -c:v libx265 -crf 22 \
 		-ac 2 -ar 48000 \
@@ -187,29 +217,101 @@ addoverlay () {
 # Render the video and the audio in separate streams, so here comes add overlay simplified
 
 addoverlays () {
-	orig="$1"
-	ovl="$2"
-	origffn="${orig##*/}"
-	origfno="${origffn%.*}"
-	vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
-	aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
+	local orig="$1"
+	local ovl="$2"
+	local origffn="${orig##*/}"
+	local origfno="${origffn%.*}"
+	local l_speedup="${d_speedup}"
+	local -a l_input
+	local -a l_pre_pre_overlay_filter
+	local -a l_post_pre_overlay_filter
+	local -a l_pre_post_overlay_filter
+	local -a l_post_post_overlay_filter
+	local -a l_duration_params=( "${duration_params[@]}" )
+	local l_overlay_filter_input="$d_overlay_filter_input"
+	local l_ovlext="$d_ovlext"
+	local -a ffmpeg_params
+	local -a ffmpeg_filters
+	local -a l_post_overlay_chain
+	local l_post_overlay_filter_input='1v'
+	local -a l_outfr=( "${d_outfr[@]}" )
+	local -a l_audio_filter=( "${d_audio_filter[@]}" )
+	local vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
+	local aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
 	echo orgfr cmd: ffprobe -of json -show_entries stream "$orig" 2>/dev/null \| jq '.streams[0].r_frame_rate' \| tr -d '"'
-	origfr=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].r_frame_rate' | tr -d '"' `
+	local origfr=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].r_frame_rate' | tr -d '"' `
+	echo "origfr: $origfr"
+	local origdir="${orig%/*}"
+	local rfr=`printf 'scale=4\n%s/4\n' "$origfr" | bc `
 		#-frames:a $aframes -frames:v $[(vframes+3)/4] \
 		#-filter_complex '[0:v][1:v]overlay[vo];[0:a]apad[ao]' \
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
 		#-frames:v $[(vframes+3)/4] \
-	[ "$outfr" = 'origfr' ] && outfr="$origfr"
-	echo ffmpeg $encode_options -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-		-filter_complex "${pre_overlay_filter}overlay${post_overlay_filter}" \
-		-r ${outfr}  $amap -c:v $output_codec $quality_param \
-		"${origfno}${ovl}.mp4"
-	time ffmpeg $encode_options -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-		-filter_complex "${pre_overlay_filter}overlay${post_overlay_filter}" \
-		-r ${outfr}  $amap -c:v $output_codec $quality_param \
-		"${origfno}${ovl}.mp4"
+	[ "$l_outfr" = 'origfr' ] && l_outfr="$origfr"
+	if [ -r "${origfno}.sh" ]; then
+		. "${origfno}.sh"
+	fi
+	if [ -r "${origfno}-${ovl}.sh" ]; then
+		. "${origfno}-${ovl}.sh"
+	fi
+	local outvframes=$[(vframes+l_speedup-1)/l_speedup]
+	local outduration=`printf 'scale=3\n%s/(%s)\n' "$outvframes" "$origfr" | bc `
+	[ "${outduration:0:1}" == "." ] && outduration="0$outduration"
+	echo vframes: $vframes aframes: $aframes outtvframes: $outvframes outduration: $outduration
+	l_duration_params=( "${l_duration_params[@]//@outvframes@/$outvframes}" )
+	l_duration_params=( "${l_duration_params[@]//@outduration@/$outduration}" )
+	local outfn="${origfno}${ovl}${fnsuffix}.mp4"
+	ffmpeg_params+=( "${encode_options[@]}" )
+	ffmpeg_params+=( "-i" "$orig" )
+	ffmpeg_params+=( "-r" "1" "-i" "${origfno}-${ovl}%04d.${d_ovlext}" )
+	ffmpeg_params+=( "${l_input[@]}" )
+	ffmpeg_filters+=( "${l_pre_pre_overlay_filter[@]}" )
+	ffmpeg_filters+=( "${pre_overlay_filter}" )
+	ffmpeg_filters+=( "${l_post_pre_overlay_filter[@]}" )
+	ffmpeg_filters+=( "[${l_overlay_filter_input}][1:v]${overlay_filter}[1v]" )
+	l_post_overlay_chain+=( "${l_pre_post_overlay_filter[@]}" )
+	l_post_overlay_chain+=( "${post_overlay_filter[@]}" )
+	l_post_overlay_chain+=( "${l_post_post_overlay_filter[@]}" )
+	local l_post_overlay_filter=''
+	for i in "${!l_post_overlay_chain[@]}" ; do
+		if [ "$i" == "0" ]; then
+			l_post_overlay_filter+='[1v]'
+		else
+			l_post_overlay_filter+=','
+		fi
+		l_post_overlay_filter+="${l_post_overlay_chain[i]}"
+	done
+	ffmpeg_filters+=( "${l_post_overlay_filter}" )
+	ffmpeg_filters+=( "${l_audio_filter[@]}" )
+	local ffmpeg_filter_expression=''
+	for i in "${!ffmpeg_filters[@]}" ; do
+		[ "$i" != "0" ] && ffmpeg_filter_expression+=';'
+		ffmpeg_filter_expression+="${ffmpeg_filters[i]}"
+	done
+	ffmpeg_filter_expression="${ffmpeg_filter_expression//@sup@/$l_speedup}"
+	ffmpeg_params+=( "-filter_complex" "$ffmpeg_filter_expression" )
+	ffmpeg_params+=( "${l_outfr[@]}" )
+	ffmpeg_params+=( "${audio_map[@]}" )
+	ffmpeg_params+=( "${l_duration_params[@]}" )
+	ffmpeg_params+=( "${output_codec[@]}" )
+	ffmpeg_params+=( "${quality_param[@]}" )
+	ffmpeg_params+=( "${outfn}" )
+
+	echo ffmpeg "${ffmpeg_params[@]}"
+	[ -r "${outfn}" ] || time ffmpeg "${ffmpeg_params[@]}"
+
+#	echo ffmpeg $encode_options -i "$orig" \
+#		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
+#		$l_input \
+#		-filter_complex "${l_pre_pre_overlay_filter}${pre_overlay_filter//@rfr/$rfr}${l_post_pre_overlay_filter}overlay${l_pre_post_overlay_filter}${post_overlay_filter}${l_post_post_overlay_filter}" \
+#		${outfr}  $amap -c:v $output_codec $quality_param \
+#		"${origfno}${ovl}.mp4"
+#	[ -r "${origfno}${ovl}.mp4" ] || time ffmpeg $encode_options -i "$orig" \
+#		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
+#		$l_input \
+#		-filter_complex "${l_pre_pre_overlay_filter}${pre_overlay_filter//@rfr/$rfr}${l_post_pre_overlay_filter}overlay${l_pre_post_overlay_filter}${post_overlay_filter}${l_post_post_overlay_filter}" \
+#		${outfr}  $amap -c:v $output_codec $quality_param \
+#		"${origfno}${ovl}.mp4"
 }
 
 sjgentimesh () {
@@ -255,6 +357,46 @@ sjfixallvideo () {
 	done
 }
 
+speedup4hwrender () {
+	vin="$1"
+	vfn="${vin##*/}"
+	vout="${vfn%.mp4}f.mp4"
+	ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -filter_complex setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=format=nv12 -r 30/1 -an -c:v hevc_vaapi -qp 22 $vout
+}
+
+addoverlaysgrid () {
+	vin="$1"
+	vfn="${vin##*/}"
+	ovl="${vfn%.mp4}"
+	vout="${vfn%.mp4}f.mp4"
+	ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12 -r 30/1 -an -c:v hevc_vaapi -qp 22 "$vout"
+}
+
+gridrender () {
+	vout="$1"
+	v0="$2"
+	v1="$3"
+	v2="$4"
+	v3="$5"
+	ffmpeg -i "$v0" -i "$v1" -i "$v2" -i "$v3" -vaapi_device /dev/dri/renderD128 -filter_complex '[0:a][1:a][2:a][3:a]amerge=inputs=4,pan=stereo|c0<c0+c2|c1<c4+c6[a];[0:v]crop=h=1080:y=0[0v];[1:v]crop=h=1080:y=0[1v];[2:v]crop=h=1080:y=0[2v];[3:v]crop=h=1080:y=0[3v];[0v][1v][2v][3v]xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0,format=yuv420p,hwupload,scale_vaapi=format=nv12' -c:v hevc_vaapi -map '[a]' -qp 22 "$vout"
+}
+
+gridrenderallvideo () {
+	# So, if the work dir, where the images were generated is /store/vedit/WKO.0903
+	# Than sourcedir is /store/vedit/WK.0903
+	gvout="$1"
+	sourcedir="${PWD%?.*}.${PWD##*.}"
+	for i in ${sourcedir}/*.mp4 ; do
+		vfn="${i##*/}"
+		if [ -r "${vfn%.mp4}-f0000.$ovlext" ]; then
+			addoverlaysgrid "$i"
+		else
+			speedup4hwrender "$i"
+		fi
+	done
+	ngpfixallvideo f
+}
+
 gpfixallvideo () {
 	sourcedir="${PWD%?.*}.${PWD##*.}"
 	renderext="$1"
@@ -282,7 +424,7 @@ ngpfixallvideo () {
 		if [ -r "$destfn" ] ; then
 			:
 		else
-			ffmpeg -i "$vidf" -i "$i" -c:v copy -map 0:v:0 -af atempo=4 -map 1:a:0 -t $vduration "$destfn"
+			ffmpeg -i "$vidf" -i "$i" -c:v copy -map 0:v:0 -af atempo=4 -ar 48000 -ac 2 -map 1:a:0 -t $vduration "$destfn"
 		fi
 	done
 }

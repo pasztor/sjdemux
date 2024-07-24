@@ -20,7 +20,7 @@ END
 	exit 0
 fi
 if [ -d "$1" ]; then
-	exec mpv --input-ipc-server=~~/st.sock -shuffle -vo null "$@"
+	exec mpv --input-ipc-server=~~/st.sock -shuffle -vo null -hwdec=no "$@"
 else
 	fn="${1%.mp4}"
 	fn="${fn%_??s4}"
