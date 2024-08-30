@@ -221,6 +221,7 @@ addoverlays () {
 	local ovl="$2"
 	local origffn="${orig##*/}"
 	local origfno="${origffn%.*}"
+	local origit="${orig%.*}.input.txt"
 	local l_speedup="${d_speedup}"
 	local -a l_input
 	local -a l_pre_pre_overlay_filter
@@ -262,7 +263,12 @@ addoverlays () {
 	l_duration_params=( "${l_duration_params[@]//@outduration@/$outduration}" )
 	local outfn="${origfno}${ovl}${fnsuffix}.mp4"
 	ffmpeg_params+=( "${encode_options[@]}" )
-	ffmpeg_params+=( "-i" "$orig" )
+	if [ -r "$origit" ];
+	then
+		ffmpeg_params+=( "-f" "concat" "-safe" "0" "-i" "$origit" )
+	else
+		ffmpeg_params+=( "-i" "$orig" )
+	fi
 	ffmpeg_params+=( "-r" "1" "-i" "${origfno}-${ovl}%04d.${d_ovlext}" )
 	ffmpeg_params+=( "${l_input[@]}" )
 	ffmpeg_filters+=( "${l_pre_pre_overlay_filter[@]}" )

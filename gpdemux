@@ -75,17 +75,21 @@ class Avidemux:
             with open(inputfile, 'w') as winputfile:
                 for cinfile in self.concatbuffer['files']:
                     cinfilename = cinfile['filename']
-                    winputfile.write(f"file '{cinfilename}\n")
+                    winputfile.write(f"file '{cinfilename}'\n")
                     for k in cinfile.keys():
                         if k != 'filename':
                             winputfile.write(f'{k} {cinfile[k]}\n')
-            print(f"ffmpeg -f concat -safe 0 -i {inputfile} -c copy -metadata 'creation_time={creation_time}' {outputfile}")
+            if args.blank:
+                duration = str(float(self.concatbuffer['durms']/1000000))
+                print(f"ffmpeg -i {args.blank} -c copy -t {duration} -metadata 'creation_time={creation_time}' {outputfile}")
+            else:
+                print(f"ffmpeg -f concat -safe 0 -i {inputfile} {args.filter} -metadata 'creation_time={creation_time}' {outputfile}")
         self.concatbuffer['inputfile'] = None
         self.concatbuffer['files'] = []
         self.concatbuffer['outfile'] = None
 
 
-    def initConcatBuffer(self, filename, startms, creation_time):
+    def initConcatBuffer(self, filename, startms, creation_time, durms):
         self.flushConcatBuffer()
         if args.prefix is None:
             prefix = args.pyfile.name[:-3]
@@ -95,19 +99,21 @@ class Avidemux:
         self.concatbuffer['inputfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.input.txt'
         self.concatbuffer['files'] = [ {'filename': filename, 'inpoint': str(float(startms/1000000))} ]
         self.concatbuffer['creation_time'] = creation_time
+        self.concatbuffer['durms'] = durms
         #print(f'debug: initConcatBuffer: filename: {filename}, startms: {startms}, creation_time: {creation_time}, concatbuffer: {self.concatbuffer}', file=sys.stderr)
         #print(f'debug: initConcatBuffer: concatbuffer: {self.concatbuffer}', file=sys.stderr)
         self.segments -= 1
 
 
-    def appendConcatBuffer(self, filename, durms):
+    def appendConcatBuffer(self, filename, durms, midslice):
         newentry = dict()
         newentry.setdefault('filename', filename)
-        if durms is None:
+        if midslice:
             self.segments -= 1
         else:
             newentry.setdefault('outpoint', str(float(durms/1000000)))
         self.concatbuffer['files'].append(newentry)
+        self.concatbuffer['durms'] += durms
 
     def isConcatBufferStarted(self):
         return self.concatbuffer['inputfile'] is not None
@@ -118,6 +124,7 @@ class Avidemux:
         else:
             prefix = args.prefix
         newfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
+        newinputfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.input.txt'
         if args.sliceonly:
             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -ss {startms/1000000} -t {durms/1000000} {newfilename}")
         else:
@@ -134,18 +141,23 @@ class Avidemux:
                 if args.sourcedir is None:
                     # If Segment ends on camera segment's end:
                     if float(self.videos[vidno]['streams'][0]['duration']) == float((startms + durms)/1000000) :
-                        self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart)
+                        self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart, durms)
                         #print(f'# {newfilename} ends on file, maybe need to append with next segment', file=sys.stderr)
                     # If Segments starts on camera segment, might need to append to concatbuffer
                     elif startms == 0 and self.isConcatBufferStarted():
-                        if float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000):
-                            adurms = None
-                        else:
-                            adurms = durms
-                        self.appendConcatBuffer(self.videos[vidno]['filename'], adurms)
+                        self.appendConcatBuffer(self.videos[vidno]['filename'], durms, bool(float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000)))
                     else:
                         self.flushConcatBuffer()
-                        print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
+                        if args.blank:
+                            with open(newinputfilename, 'w') as winputfile:
+                                winputfile.write(f"file '{self.videos[vidno]['filename']}'\n")
+                                inpoint = str(float(startms/1000000))
+                                outpoint = str(float((startms+durms)/1000000))
+                                winputfile.write(f"inpoint {inpoint}\n")
+                                winputfile.write(f"outpoint {outpoint}\n")
+                            print(f"ffmpeg -i {args.blank} -c copy -metadata 'creation_time={newstart}' -t {durms/1000000} {newfilename}")
+                        else:
+                            print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
                 else:
                     sourcefile = os.path.join(args.sourcedir, newfilename)
                     print(f"ffmpeg -i {sourcefile} -c copy -metadata 'creation_time={newstart}' {newfilename}")
@@ -196,6 +208,7 @@ parser.add_argument('-S', '--sourcedir', default=None, help='Source dir of pre-p
 parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used for slices in the resulting commands')
 parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
 parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
+parser.add_argument('-b', '--blank', default=None, help='Blank mp4 file to use as input in the generated commands')
 parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')
 args = parser.parse_args()
 exec(args.pyfile.read())

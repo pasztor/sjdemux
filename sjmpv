@@ -26,5 +26,5 @@ else
 	fn="${fn%_??s4}"
 	fn="${fn%_?N}"
 	export SJSTFILE="${fn}_soundtrack.txt"
-	exec mpv --input-ipc-server=~~/main.sock "$1"
+	exec mpv --input-ipc-server=~~/main.sock "$@"
 fi

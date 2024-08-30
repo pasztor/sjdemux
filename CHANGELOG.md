@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2024.08.30.
+* sjmpv - you can pass more than just one file to the "main" player. Distinction: if the first argument is a dir, than it's the soundtrack player, otherwise it will be the main player.
+* sjstgen - soundtrack template change to 25fps kdenlive files. Should make it a parameterized thing, but for the time being this will do
+* vedit & gpdemux - blank support: see examples/blackgen.sh how to generate a long completely blank black video. That has a small size, fast to copy a stream from. For the gpx2video it doesn't matter if you copy out the real slices, or only provide a blank file, as long as the metadata about the `creation_time` contains the right starting timestamp, and it will generate as many overlay image file, how long the mp4 file is, no matter the content. So, from now on if you provide a `-b blankfile.mp4` to the gpdemux it will rather generate commands to copy that blank file, and only writes input files what you can use to the concat filter's input containing inpoint and outpoint entries. Practically, it's the exact same like you copy out the slices, except you don't have to do that anymore. Less temporary space is needed on the disk. vedit size support also provided: when you run the renderall or the addoverlays functions it will check if the input.txt file is provided. If it is there, it won't consider the mp4 file as the source (that's the small blank file for the gpx2info) but will use the concat filter and that input.txt file as the input video stream.
+* added new examples to the examples directory:
+  * `mpv.input.conf` - example file for mpv's input.conf. Append that to your ~/.config/mpv/input.conf
+  * `examples/2024_0824_S1n001.sh` - another photo display, but this time it has a delay starting from the video slice's starting point as well
+  * `examples/blackgen.sh` - example command how to generate a blank file what you can use with the new -b parameter of gpdemux.
+  * `examples/imgprep.sh` - playing around with imagemagick to take the picture I've took with my phone: crop, add an overlay text to the photo, and use the exif info's orientation to fix it so ffmpeg will use it the correct orientation as an overlay. The result of this command is used in the `examples/2024_0824_S1n001.sh` param.
+
+## 2024.07.24.
+* sjmpv when plays the soundtrack it will append the hwdec=no parameter too to the mpv parameters. Quite useful when the amdgpu driver issues start to hit.
+* sjstvol script to change volume on the soundtrack player. With some new input key binding I can change the volume of the soundtrack player from the main player.
+* vedit.sh: major improvement on the stream processing/ approach. The fps filter was generating frames with the 4 times speedup like this: 0,1,2, 4, 8, 12, ... This was the reason I could feel some recoil in the videostream at the cutting points. fps filter is completely thrown out from now on. No need to calculate or use the frames anymore for the renderall/addoverlays functions. The new method: use the `select=not(mod(n\,4))` filter expression in the filter chain to drop out 3/4 of the frames in case of a 4 times speedup. Way more efficient, and no more lost frames at the end of the video. Finally ffmpeg now finish the job without an error message. Though no need to calculate, I haven't erased those frame querying parts and to debug print them. But the data is not needed anymore.
+* vedit.sh serious improvement on composing the ffmpeg parameter-chain. Uses a bash array to put together the parameters. It's also easier to debug print the used ffmpeg command now before running the actual ffmpeg command. Lot of hooks to provide defaults. So far only the hw-accelerated default-set is transitioned to this new method. But it works just fine with my amdgpu driver. Also, now you can add a video-slice specific or even a video slice/rendering specific sh script to provide defaults. Eg. if you want to overlay in a slow-mo fashion an earlier part of the video, now you can find examples in the example directory. Also there are examples how to display a photo for a few second in case when I stop to take a photo.
+  * `examples/2024_0628_S3n000.sh` - example how to overlay a slow-mo part: tpad=... to delay when to display the slomo part, crop to only take a given part of the full picture, than finally the overlay to display that 20 px left and 20 px down from the top left corner.
+  * `examples/2024_0628_S3n010.sh` - example to demonstrate to display an image (photo taken at the given time), example to also rescale to fit inside the video
+  * `examples/2024_0705_S0n007.sh` - example to add two different slomo into one slice at two different point with two different delay, but cutting the same part of the image (the handlebar)
+* added in some earlier developments I used to generate grid videos. Check out the `Healy passs` videos:
+  * https://youtu.be/jPNVnNBA_Cw
+  * https://youtu.be/iHhHi59tdHI
+
 ## 2024.04.17.
 * Maybe gopro firmware update changed, but the timestamp in the gopro is gmt, so the Z at the and of the iso8601 timestamp is accurate, but for some reason, gpx2video expects that to be localtime, no matter what is the GMT offset is telling. But the GPX file is still has GMT timestamps. Solution: gpdemux now applies the current timezone's offset to the generated ffmpeg commands.
 * sjmpv wrapper takes into consideration, that a file name might reflects that there was no a separate speedup4raw stage
