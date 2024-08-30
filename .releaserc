@@ -5,6 +5,8 @@ plugins:
     - releaseRules:
       - message: '*'
         release: patch
+      - tag: 'FEATURE'
+        release: minor
   - "@semantic-release/release-notes-generator"
   - - "@semantic-release/git"
     - assets: []
