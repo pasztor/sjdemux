@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2024.09.25.
+* gpdemux - blank has a default coming from the SJBLANK envvar
+* gpdemux - fix logical error in addsegment - When a segment started in one video slice from the camera, then there was another full slice, before a slice ended, it always flushed the concatbuffer on the *midslice*, so the "midslice" parameter was never correct.
+* gpdemux - trace option, now most(/some) of the hardcoded and commented out trace/debug statements are mostly gone, and they are only printed if the -t parameter as in --trace is passed to the command as an option
+* gpscan - `-c` option added for "time correction". Though the gpxdiff option could be used when the camera's clock was somewhat off, this option had its limits. eg. when the camera's clock is so off, that if I grew the gpxdiff too much, than parts of the all day gpx slices would overlap. With the `-c` / `--time-correction` option this offset will be pre-applied to the camera's clock when the slice's gpx files are generated.
+* vedit.sh - When I used the new blank feature, the resulted video had some weird artifacts. As a workaround, I ditched to use the concat input on the rendering phase. Instead it will do an on-demand copy from the concat input to a tempfile. But this way I only need extra temp diskspace for that particular part which is actually rendered. Hope this fix will be fixed in ffmpeg sooner or later, and I can go back to use the concat input instead of generating tempfiles.
+* vedit.sh - gpgentimesh will generate the actual files, not just blank files, even if you have a user/system-wide SJBLANK envvar providing default. So the actual clock can be read from the timesync videos.
+
 ## 2024.08.30.
 * sjmpv - you can pass more than just one file to the "main" player. Distinction: if the first argument is a dir, than it's the soundtrack player, otherwise it will be the main player.
 * sjstgen - soundtrack template change to 25fps kdenlive files. Should make it a parameterized thing, but for the time being this will do

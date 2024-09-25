@@ -71,7 +71,7 @@ class Avidemux:
         outputfile = self.concatbuffer['outputfile']
         creation_time = self.concatbuffer['creation_time']
         if inputfile is not None:
-            #print(f'Debug flushing: concatbuffer: {self.concatbuffer}', file=sys.stderr)
+            args.trace and print(f' -> Debug flushing: concatbuffer: {self.concatbuffer}', file=sys.stderr)
             with open(inputfile, 'w') as winputfile:
                 for cinfile in self.concatbuffer['files']:
                     cinfilename = cinfile['filename']
@@ -90,6 +90,7 @@ class Avidemux:
 
 
     def initConcatBuffer(self, filename, startms, creation_time, durms):
+        args.trace and print(f' -> debug: initConcatBuffer, starts with flushing, initializing with filename: {filename} startms: {startms} creation_time: {creation_time} durms: {durms}', file=sys.stderr)
         self.flushConcatBuffer()
         if args.prefix is None:
             prefix = args.pyfile.name[:-3]
@@ -140,13 +141,16 @@ class Avidemux:
             else:
                 if args.sourcedir is None:
                     # If Segment ends on camera segment's end:
-                    if float(self.videos[vidno]['streams'][0]['duration']) == float((startms + durms)/1000000) :
+                    args.trace and print(f" -> Second condition check: durms {durms} startms: {startms} viduration: {self.videos[vidno]['streams'][0]['duration']}", file=sys.stderr)
+                    if startms == 0 and self.isConcatBufferStarted():
+                        args.trace and print(f" -> debug: calling appendConcatBuffer: filename: {self.videos[vidno]['filename']}, durms: {durms}, duration: {self.videos[vidno]['streams'][0]['duration']}, concatbuffer: {self.concatbuffer}", file=sys.stderr)
+                        self.appendConcatBuffer(self.videos[vidno]['filename'], durms, bool(float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000)))
+                    elif float(self.videos[vidno]['streams'][0]['duration']) == float((startms + durms)/1000000) :
                         self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart, durms)
                         #print(f'# {newfilename} ends on file, maybe need to append with next segment', file=sys.stderr)
                     # If Segments starts on camera segment, might need to append to concatbuffer
-                    elif startms == 0 and self.isConcatBufferStarted():
-                        self.appendConcatBuffer(self.videos[vidno]['filename'], durms, bool(float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000)))
                     else:
+                        args.trace and print(' -> debug: else branch', file=sys.stderr)
                         self.flushConcatBuffer()
                         if args.blank:
                             with open(newinputfilename, 'w') as winputfile:
@@ -208,7 +212,8 @@ parser.add_argument('-S', '--sourcedir', default=None, help='Source dir of pre-p
 parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used for slices in the resulting commands')
 parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
 parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
-parser.add_argument('-b', '--blank', default=None, help='Blank mp4 file to use as input in the generated commands')
+parser.add_argument('-b', '--blank', default=os.environ.get('SJBLANK', None), help='Blank mp4 file to use as input in the generated commands')
+parser.add_argument('-t', '--trace', action='store_true', help='Print tracing information useful for debug')
 parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')
 args = parser.parse_args()
 exec(args.pyfile.read())

@@ -265,7 +265,9 @@ addoverlays () {
 	ffmpeg_params+=( "${encode_options[@]}" )
 	if [ -r "$origit" ];
 	then
-		ffmpeg_params+=( "-f" "concat" "-safe" "0" "-i" "$origit" )
+		[ -r "$outfn" ] || ffmpeg -f concat -safe 0 -i "$origit" -c copy temp.mp4
+		#ffmpeg_params+=( "-f" "concat" "-safe" "0" "-i" "$origit" )
+		ffmpeg_params+=( "-i" "temp.mp4" )
 	else
 		ffmpeg_params+=( "-i" "$orig" )
 	fi
@@ -306,6 +308,10 @@ addoverlays () {
 	echo ffmpeg "${ffmpeg_params[@]}"
 	[ -r "${outfn}" ] || time ffmpeg "${ffmpeg_params[@]}"
 
+	if [ -r "$origit" ];
+	then
+		rm temp.mp4
+	fi
 #	echo ffmpeg $encode_options -i "$orig" \
 #		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
 #		$l_input \
@@ -328,7 +334,7 @@ sjgentimesh () {
 
 gpgentimesh () {
 	for i in 202?_????_S?t.py ; do
-		gpdemux -d 0 $i ;
+		SJBLANK= gpdemux -d 0 $i ;
 	done >timediff.sh
 }
 
