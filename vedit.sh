@@ -26,21 +26,24 @@ hwaccel () {
 	amap='-an'
 }
 
+preview_on() {
+	post_scale='w=1280:h=720:'
+}
+
+preview_off() {
+	post_scale=''
+}
+
 hwaccelng () {
 	encode_options=( "-vaapi_device" "/dev/dri/renderD128" )
 	output_codec=( "-c:v" "hevc_vaapi" )
-	post_overlay_filter=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=format=nv12" )
-	#pre_overlay_filter="[0:v]fps=@rfr[0v];[0v][1:v]"
-	#post_overlay_filter+=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=format=nv12" )
+	post_scale=''
+	post_overlay_filter=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=@psc@format=nv12" )
 	pre_overlay_filter='[0:v]select=not(mod(n\,4))[0v]'
 	d_overlay_filter_input='0v'
-	#pre_overlay_filter+=( 'select=not(mod(n\,@sup@))' )
 	quality_param=( "-qp" "22" )
 	overlay_filter='overlay'
 	outfr=origfr
-	#outfr=''
-	#amap='-map [v] -map [a] -ac 2 -ar 48000'
-	#amap='-an'
 	duration_params=( '-frames:v' '@outvframes@' '-t' '@outduration@' )
 	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
 	audio_map=( "-map" "[a]" '-ac' "$d_ac" "-ar" "$d_ar" )
@@ -48,13 +51,20 @@ hwaccelng () {
 }
 
 nohwaccel () {
-	encode_options=""
-	output_codec=libx265
-	post_overlay_filter=""
-	pre_overlay_filter=""
-	quality_param="-crf 22"
-	outfr='-r 7.5'
-	amap='-an'
+	encode_options=( )
+	output_codec=( "-c:v" "libx265" )
+	post_scale=''
+	post_overlay_filter=( "setpts=PTS/@sup@" )
+	post_overlay_filter_psc=( "scale=@psc@" )
+	pre_overlay_filter='[0:v]select=not(mod(n\,4))[0v]'
+	d_overlay_filter_input='0v'
+	quality_param=( "-crf" "22" )
+	overlay_filter='overlay'
+	outfr=origfr
+	duration_params=( '-frames:v' '@outvframes@' '-t' '@outduration@' )
+	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
+	audio_map=( "-map" "[a]" '-ac' "$d_ac" "-ar" "$d_ar" )
+	fnsuffix='a'
 }
 
 nohwaspeedup () {
@@ -249,11 +259,13 @@ addoverlays () {
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
 		#-frames:v $[(vframes+3)/4] \
 	[ "$l_outfr" = 'origfr' ] && l_outfr="$origfr"
-	if [ -r "${origfno}.sh" ]; then
-		. "${origfno}.sh"
+	if [ -r "${origdir}/${origfno}.sh" ]; then
+		echo reading "${origdir}/${origfno}.sh"
+		. "${origdir}/${origfno}.sh"
 	fi
-	if [ -r "${origfno}-${ovl}.sh" ]; then
-		. "${origfno}-${ovl}.sh"
+	if [ -r "${origdir}/${origfno}-${ovl}.sh" ]; then
+		echo reading "${origdir}/${origfno}-${ovl}.sh"
+		. "${origdir}/${origfno}-${ovl}.sh"
 	fi
 	local outvframes=$[(vframes+l_speedup-1)/l_speedup]
 	local outduration=`printf 'scale=3\n%s/(%s)\n' "$outvframes" "$origfr" | bc `
@@ -279,6 +291,7 @@ addoverlays () {
 	ffmpeg_filters+=( "[${l_overlay_filter_input}][1:v]${overlay_filter}[1v]" )
 	l_post_overlay_chain+=( "${l_pre_post_overlay_filter[@]}" )
 	l_post_overlay_chain+=( "${post_overlay_filter[@]}" )
+	[ -n "$post_scale" ] && l_post_overlay_chain+=( "${post_overlay_filter_psc[@]}" )
 	l_post_overlay_chain+=( "${l_post_post_overlay_filter[@]}" )
 	local l_post_overlay_filter=''
 	for i in "${!l_post_overlay_chain[@]}" ; do
@@ -297,6 +310,7 @@ addoverlays () {
 		ffmpeg_filter_expression+="${ffmpeg_filters[i]}"
 	done
 	ffmpeg_filter_expression="${ffmpeg_filter_expression//@sup@/$l_speedup}"
+	ffmpeg_filter_expression="${ffmpeg_filter_expression//@psc@/$post_scale}"
 	ffmpeg_params+=( "-filter_complex" "$ffmpeg_filter_expression" )
 	ffmpeg_params+=( "${l_outfr[@]}" )
 	ffmpeg_params+=( "${audio_map[@]}" )
@@ -381,7 +395,8 @@ addoverlaysgrid () {
 	vfn="${vin##*/}"
 	ovl="${vfn%.mp4}"
 	vout="${vfn%.mp4}f.mp4"
-	ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12 -r 30/1 -an -c:v hevc_vaapi -qp 22 "$vout"
+	echo ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
+	[ -r "$vout" ] || ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
 }
 
 gridrender () {
@@ -400,13 +415,16 @@ gridrenderallvideo () {
 	sourcedir="${PWD%?.*}.${PWD##*.}"
 	for i in ${sourcedir}/*.mp4 ; do
 		vfn="${i##*/}"
-		if [ -r "${vfn%.mp4}-f0000.$ovlext" ]; then
+		echo checking: "${vfn%.mp4}-f0000.$d_ovlext"
+		if [ -r "${vfn%.mp4}-f0000.$d_ovlext" ]; then
+			echo running addoverlaysgrid on "$1"
 			addoverlaysgrid "$i"
 		else
+			echo running speedup4hwrender on "$1"
 			speedup4hwrender "$i"
 		fi
 	done
-	ngpfixallvideo f
+	#ngpfixallvideo f
 }
 
 gpfixallvideo () {

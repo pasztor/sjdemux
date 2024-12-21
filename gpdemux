@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import math
 import subprocess
 import time
 import calendar
@@ -80,7 +81,10 @@ class Avidemux:
                         if k != 'filename':
                             winputfile.write(f'{k} {cinfile[k]}\n')
             if args.blank:
-                duration = str(float(self.concatbuffer['durms']/1000000))
+                duration = float(self.concatbuffer['durms']/1000000)
+                if math.ceil(duration)-duration < args.roundup:
+                    duration = math.ceil(duration)
+                duration = str(duration)
                 print(f"ffmpeg -i {args.blank} -c copy -t {duration} -metadata 'creation_time={creation_time}' {outputfile}")
             else:
                 print(f"ffmpeg -f concat -safe 0 -i {inputfile} {args.filter} -metadata 'creation_time={creation_time}' {outputfile}")
@@ -156,11 +160,15 @@ class Avidemux:
                             with open(newinputfilename, 'w') as winputfile:
                                 winputfile.write(f"file '{self.videos[vidno]['filename']}'\n")
                                 inpoint = str(float(startms/1000000))
+                                if math.ceil(durms/1000000)-durms/1000000 < args.roundup:
+                                    durms = int(math.ceil(durms/1000000)*1000000)
                                 outpoint = str(float((startms+durms)/1000000))
                                 winputfile.write(f"inpoint {inpoint}\n")
                                 winputfile.write(f"outpoint {outpoint}\n")
                             print(f"ffmpeg -i {args.blank} -c copy -metadata 'creation_time={newstart}' -t {durms/1000000} {newfilename}")
                         else:
+                            if math.ceil(durms/1000000)-durms/1000000 < args.roundup:
+                                durms = int(math.ceil(durms/1000000)*1000000)
                             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
                 else:
                     sourcefile = os.path.join(args.sourcedir, newfilename)
@@ -190,6 +198,15 @@ class Avidemux:
     def setContainer(self, *argv, **kw) : pass
 
 
+def rounding(x):
+    try:
+        x = float(x)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'{x} not a floating point literal')
+    if x < 0.0 or x > 0.5:
+        raise argparse.ArgumentTypeError(f'{x} not in range [0, 0.5]')
+    return x
+
 parser = argparse.ArgumentParser(description='''Helps processing SJcam recordings:
 
   This script adjusts SJCam recorded videos\' creation_time, and make it
@@ -214,6 +231,7 @@ parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the 
 parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
 parser.add_argument('-b', '--blank', default=os.environ.get('SJBLANK', None), help='Blank mp4 file to use as input in the generated commands')
 parser.add_argument('-t', '--trace', action='store_true', help='Print tracing information useful for debug')
+parser.add_argument('-r', '--roundup', type=rounding, default=0.05, help="Round up slice duration, if it's closer to the int than this number default: 0.05, allowed: [0, 0.5]")
 parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')
 args = parser.parse_args()
 exec(args.pyfile.read())
