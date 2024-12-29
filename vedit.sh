@@ -39,14 +39,16 @@ hwaccelng () {
 	output_codec=( "-c:v" "hevc_vaapi" )
 	post_scale=''
 	post_overlay_filter=( "setpts=PTS/@sup@" "format=yuv420p" "hwupload" "scale_vaapi=@psc@format=nv12" )
-	pre_overlay_filter='[0:v]select=not(mod(n\,4))[0v]'
+	post_overlay_filter_psc=( )
+	pre_overlay_filter='[0:v]select=not(mod(n\,@sup@))[0v]'
 	d_overlay_filter_input='0v'
 	quality_param=( "-qp" "22" )
 	overlay_filter='overlay'
 	outfr=origfr
-	duration_params=( '-frames:v' '@outvframes@' '-t' '@outduration@' )
+	duration_params=( )
 	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
-	audio_map=( "-map" "[a]" '-ac' "$d_ac" "-ar" "$d_ar" )
+	d_audio_filter_out='a'
+	d_audio_map=( "-map" "[@afa@]" '-ac' "$d_ac" "-ar" "$d_ar" )
 	fnsuffix='a'
 }
 
@@ -56,14 +58,15 @@ nohwaccel () {
 	post_scale=''
 	post_overlay_filter=( "setpts=PTS/@sup@" )
 	post_overlay_filter_psc=( "scale=@psc@" )
-	pre_overlay_filter='[0:v]select=not(mod(n\,4))[0v]'
+	pre_overlay_filter='[0:v]select=not(mod(n\,@sup@))[0v]'
 	d_overlay_filter_input='0v'
 	quality_param=( "-crf" "22" )
 	overlay_filter='overlay'
 	outfr=origfr
-	duration_params=( '-frames:v' '@outvframes@' '-t' '@outduration@' )
+	duration_params=( )
 	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
-	audio_map=( "-map" "[a]" '-ac' "$d_ac" "-ar" "$d_ar" )
+	d_audio_filter_out='a'
+	d_audio_map=( "-map" "[@afa@]" '-ac' "$d_ac" "-ar" "$d_ar" )
 	fnsuffix='a'
 }
 
@@ -131,6 +134,12 @@ addsoundtrack () {
 	strack="$2"
 	new="${orig%.mp4}f.mp4"
 	ffmpeg -i "$orig" -i "$strack" -c:v copy -map 0:v:0 -filter_complex "[0:a][1:a]amerge=inputs=2,pan=stereo|c0<c0+c2|c1<c1+c3[a]" -map "[a]" "$new"
+}
+
+copymetadata () {
+	orig="$1"
+	meta="$2"
+	ffmpeg -i "$orig" -i "$meta" -map_metadata 1 -map 0 -c copy "${orig%.mp4}m.mp4"
 }
 
 extractaudio () {
@@ -226,6 +235,17 @@ addoverlay () {
 # ^ This approach wasn't exactly precise with the audio. Somehow it always caused some skew, so I went back to the basics:
 # Render the video and the audio in separate streams, so here comes add overlay simplified
 
+gentemp () {
+	local origit="$1"
+	local tempfile="`mktemp -up .`.mp4"
+	if [ -r "$outfn" ]; then
+		printf "PLACE-%s-HOLDER" "$origit"
+		return
+	fi
+	ffmpeg -f concat -safe 0 -i "$origit" -c copy "$tempfile"
+	printf "%s" "$tempfile"
+}
+
 addoverlays () {
 	local orig="$1"
 	local ovl="$2"
@@ -233,6 +253,8 @@ addoverlays () {
 	local origfno="${origffn%.*}"
 	local origit="${orig%.*}.input.txt"
 	local l_speedup="${d_speedup}"
+	local -a l_tempfiles
+	local l_tempfn
 	local -a l_input
 	local -a l_pre_pre_overlay_filter
 	local -a l_post_pre_overlay_filter
@@ -247,6 +269,8 @@ addoverlays () {
 	local l_post_overlay_filter_input='1v'
 	local -a l_outfr=( "${d_outfr[@]}" )
 	local -a l_audio_filter=( "${d_audio_filter[@]}" )
+	local l_audio_map=( "${d_audio_map[@]}" )
+	local l_audio_filter_out="$d_audio_filter_out"
 	local vframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[0].nb_frames' | tr -d '"' `
 	local aframes=`ffprobe -of json -show_entries stream "$orig" 2>/dev/null | jq '.streams[1].nb_frames' | tr -d '"' `
 	echo orgfr cmd: ffprobe -of json -show_entries stream "$orig" 2>/dev/null \| jq '.streams[0].r_frame_rate' \| tr -d '"'
@@ -259,6 +283,7 @@ addoverlays () {
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
 		#-frames:v $[(vframes+3)/4] \
 	[ "$l_outfr" = 'origfr' ] && l_outfr="$origfr"
+	local outfn="${origfno}${ovl}${fnsuffix}.mp4"
 	if [ -r "${origdir}/${origfno}.sh" ]; then
 		echo reading "${origdir}/${origfno}.sh"
 		. "${origdir}/${origfno}.sh"
@@ -273,13 +298,17 @@ addoverlays () {
 	echo vframes: $vframes aframes: $aframes outtvframes: $outvframes outduration: $outduration
 	l_duration_params=( "${l_duration_params[@]//@outvframes@/$outvframes}" )
 	l_duration_params=( "${l_duration_params[@]//@outduration@/$outduration}" )
-	local outfn="${origfno}${ovl}${fnsuffix}.mp4"
 	ffmpeg_params+=( "${encode_options[@]}" )
 	if [ -r "$origit" ];
 	then
-		[ -r "$outfn" ] || ffmpeg -f concat -safe 0 -i "$origit" -c copy temp.mp4
-		#ffmpeg_params+=( "-f" "concat" "-safe" "0" "-i" "$origit" )
-		ffmpeg_params+=( "-i" "temp.mp4" )
+		if [ -r "$outfn" ]; then
+			echo "$outfn exists, just dry-run assembling the final command line"
+			ffmpeg_params+=( "-i" "PLACE-${origit}-HOLDER" )
+		else
+			l_tempfn="`gentemp $origit`"
+			l_tempfiles+=( "$l_tempfn" )
+			ffmpeg_params+=( "-i" "$l_tempfn" )
+		fi
 	else
 		ffmpeg_params+=( "-i" "$orig" )
 	fi
@@ -313,7 +342,8 @@ addoverlays () {
 	ffmpeg_filter_expression="${ffmpeg_filter_expression//@psc@/$post_scale}"
 	ffmpeg_params+=( "-filter_complex" "$ffmpeg_filter_expression" )
 	ffmpeg_params+=( "${l_outfr[@]}" )
-	ffmpeg_params+=( "${audio_map[@]}" )
+	l_audio_map=( "${l_audio_map[@]//@afa@/$l_audio_filter_out}" )
+	ffmpeg_params+=( "${l_audio_map[@]}" )
 	ffmpeg_params+=( "${l_duration_params[@]}" )
 	ffmpeg_params+=( "${output_codec[@]}" )
 	ffmpeg_params+=( "${quality_param[@]}" )
@@ -324,7 +354,7 @@ addoverlays () {
 
 	if [ -r "$origit" ];
 	then
-		rm temp.mp4
+		[ -r "${l_tempfiles[0]}" ] && rm "${l_tempfiles[@]}"
 	fi
 #	echo ffmpeg $encode_options -i "$orig" \
 #		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
