@@ -30,7 +30,7 @@ considered as the same track. For this, you can user the -j option.
 
 ENVIRONMENT:
 
-  * Setting of SJTZ environment variable will override TZ for this script.
+  * Setting of SJTZS environment variable will override TZ for this script.
 ''', formatter_class=argparse.RawTextHelpFormatter)
 
 parser.add_argument('-d', '--destdir', default='.', help='Destionation dir, where to save the resulted .py files')
@@ -219,8 +219,8 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
                             outfile.write(line)
 
 
-if 'SJTZ' in os.environ:
-    os.environ['TZ'] = os.environ['SJTZ']
+if 'SJTZS' in os.environ:
+    os.environ['TZ'] = os.environ['SJTZS']
     time.tzset()
 
 if not os.path.exists(args.destdir):

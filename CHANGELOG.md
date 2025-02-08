@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2025.01.19.
+* major refactor in the directory structure:
+  * Now it just needs one directory, and every other "piece" goes into subdirectories:
+    * fsrc will have the blank files to generate all overlay files. You don't need to regenerate them, every time you do edits to the final (to be) cut.
+    * fovl will have all the overlay images, for every second
+    * rsrc will have (with the "blank" feature used,) the blank .mp4 files, the .input.txt files to generate the temporary files needed to the render, and the .dsh file for the segment's "definition" info.
+    * rout will have the rendered output segments
+    * renderall will look into rsrc for the segment's ".sh" files for extra segment-local filters to be applied / defaults to be overriden.
+* With this refactor, the whole process became somewhat simpler
+
 ## 2024.12.29.
 * several `vedit.sh` improvements and fixes:
   * defaults for `pre_overlay_filters` is fixed now. The number `4` was hardcoded in there, so no matter how much speedup was desired, it always dropped every frame except keeping every fourth.

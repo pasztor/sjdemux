@@ -39,6 +39,8 @@ class Avidemux:
             'files': [],
             'inputfile': None,
             'outputfile': None,
+            'dfile': None,
+            'sdiff': None,
             'creation_time': None
             }
 
@@ -70,9 +72,13 @@ class Avidemux:
     def flushConcatBuffer(self):
         inputfile = self.concatbuffer['inputfile']
         outputfile = self.concatbuffer['outputfile']
+        dfile = self.concatbuffer['dfile']
+        sdiff = self.concatbuffer['sdiff']
         creation_time = self.concatbuffer['creation_time']
+
         if inputfile is not None:
             args.trace and print(f' -> Debug flushing: concatbuffer: {self.concatbuffer}', file=sys.stderr)
+
             with open(inputfile, 'w') as winputfile:
                 for cinfile in self.concatbuffer['files']:
                     cinfilename = cinfile['filename']
@@ -80,31 +86,43 @@ class Avidemux:
                     for k in cinfile.keys():
                         if k != 'filename':
                             winputfile.write(f'{k} {cinfile[k]}\n')
+
+            duration = float(self.concatbuffer['durms']/1000000)
+            if math.ceil(duration)-duration < args.roundup:
+                duration = math.ceil(duration)
+            duration = str(duration)
+
             if args.blank:
-                duration = float(self.concatbuffer['durms']/1000000)
-                if math.ceil(duration)-duration < args.roundup:
-                    duration = math.ceil(duration)
-                duration = str(duration)
+                with open(dfile, 'w') as wdfile:
+                    wdfile.write(f'l_sdiff={sdiff}\nl_blank=yes\nl_duration={duration}\n')
                 print(f"ffmpeg -i {args.blank} -c copy -t {duration} -metadata 'creation_time={creation_time}' {outputfile}")
             else:
+                with open(dfile, 'w') as wdfile:
+                    wdfile.write(f'l_sdiff={sdiff}\nl_blank=no\nl_duration={duration}\n')
                 print(f"ffmpeg -f concat -safe 0 -i {inputfile} {args.filter} -metadata 'creation_time={creation_time}' {outputfile}")
+
         self.concatbuffer['inputfile'] = None
         self.concatbuffer['files'] = []
         self.concatbuffer['outfile'] = None
+        self.concatbuffer['dfile'] = None
+        self.concatbuffer['sdiff'] = None
 
 
-    def initConcatBuffer(self, filename, startms, creation_time, durms):
+    def initConcatBuffer(self, filename, startms, creation_time, durms, sdiff):
         args.trace and print(f' -> debug: initConcatBuffer, starts with flushing, initializing with filename: {filename} startms: {startms} creation_time: {creation_time} durms: {durms}', file=sys.stderr)
         self.flushConcatBuffer()
         if args.prefix is None:
             prefix = args.pyfile.name[:-3]
         else:
             prefix = args.prefix
+        prefix = os.path.join( args.outdir, prefix)
         self.concatbuffer['outputfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
         self.concatbuffer['inputfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.input.txt'
+        self.concatbuffer['dfile'] = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.dsh'
         self.concatbuffer['files'] = [ {'filename': filename, 'inpoint': str(float(startms/1000000))} ]
         self.concatbuffer['creation_time'] = creation_time
         self.concatbuffer['durms'] = durms
+        self.concatbuffer['sdiff'] = sdiff
         #print(f'debug: initConcatBuffer: filename: {filename}, startms: {startms}, creation_time: {creation_time}, concatbuffer: {self.concatbuffer}', file=sys.stderr)
         #print(f'debug: initConcatBuffer: concatbuffer: {self.concatbuffer}', file=sys.stderr)
         self.segments -= 1
@@ -128,18 +146,23 @@ class Avidemux:
             prefix = args.pyfile.name[:-3]
         else:
             prefix = args.prefix
+        prefix = os.path.join(args.outdir, prefix)
         newfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.mp4'
         newinputfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.input.txt'
+        newdfilename = prefix + ( f'%0{args.numdigits}d' % self.segments ) + '.dsh'
         if args.sliceonly:
             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -ss {startms/1000000} -t {durms/1000000} {newfilename}")
         else:
             newstartts = self.videos[vidno]['stime'] + startms/1000000
+            newstartdiff = self.videos[vidno]['stime'] + startms/1000000 - self.videos[0]['stime']
             newstart = time.strftime('%Y-%m-%dT%H:%M:%S.000000Z', time.localtime(newstartts))
+            sdiff = f'{newstartdiff:0.3f}'
             if args.diff_mode:
                 if os.path.exists(newfilename):
                     slice_info = get_video_info(newfilename)
                     slice_ctime = vinfo_time_to_epoch(slice_info)
-                    print(f'{newfilename} diff: {slice_ctime-newstartts}')
+                    print(f'{newfilename} diff: {slice_ctime-newstartts}', file=sys.stderr)
+                    print(f'. <( gpdemux -o rsrc -d {slice_ctime-newstartts} {args.pyfile.name} )')
                 else:
                     print(f'file doesn\'t exist: {newfilename}', file=sys.stderr)
             else:
@@ -150,25 +173,27 @@ class Avidemux:
                         args.trace and print(f" -> debug: calling appendConcatBuffer: filename: {self.videos[vidno]['filename']}, durms: {durms}, duration: {self.videos[vidno]['streams'][0]['duration']}, concatbuffer: {self.concatbuffer}", file=sys.stderr)
                         self.appendConcatBuffer(self.videos[vidno]['filename'], durms, bool(float(self.videos[vidno]['streams'][0]['duration']) == float(durms/1000000)))
                     elif float(self.videos[vidno]['streams'][0]['duration']) == float((startms + durms)/1000000) :
-                        self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart, durms)
+                        self.initConcatBuffer(self.videos[vidno]['filename'], startms, newstart, durms, sdiff)
                         #print(f'# {newfilename} ends on file, maybe need to append with next segment', file=sys.stderr)
                     # If Segments starts on camera segment, might need to append to concatbuffer
                     else:
                         args.trace and print(' -> debug: else branch', file=sys.stderr)
                         self.flushConcatBuffer()
+                        if math.ceil(durms/1000000)-durms/1000000 < args.roundup:
+                            durms = int(math.ceil(durms/1000000)*1000000)
                         if args.blank:
                             with open(newinputfilename, 'w') as winputfile:
                                 winputfile.write(f"file '{self.videos[vidno]['filename']}'\n")
                                 inpoint = str(float(startms/1000000))
-                                if math.ceil(durms/1000000)-durms/1000000 < args.roundup:
-                                    durms = int(math.ceil(durms/1000000)*1000000)
                                 outpoint = str(float((startms+durms)/1000000))
                                 winputfile.write(f"inpoint {inpoint}\n")
                                 winputfile.write(f"outpoint {outpoint}\n")
+                            with open(newdfilename, 'w') as dfile:
+                                dfile.write(f'l_sdiff={sdiff}\nl_blank=yes\nl_duration={durms/1000000}\n')
                             print(f"ffmpeg -i {args.blank} -c copy -metadata 'creation_time={newstart}' -t {durms/1000000} {newfilename}")
                         else:
-                            if math.ceil(durms/1000000)-durms/1000000 < args.roundup:
-                                durms = int(math.ceil(durms/1000000)*1000000)
+                            with open(newdfilename, 'w') as dfile:
+                                dfile.write(f'l_startdiff={sdiff}\nl_blank=no\nl_duration={durms/1000000}\n')
                             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
                 else:
                     sourcefile = os.path.join(args.sourcedir, newfilename)
@@ -207,20 +232,19 @@ def rounding(x):
         raise argparse.ArgumentTypeError(f'{x} not in range [0, 0.5]')
     return x
 
-parser = argparse.ArgumentParser(description='''Helps processing SJcam recordings:
+parser = argparse.ArgumentParser(description='''Helps processing GoPro recordings:
 
-  This script adjusts SJCam recorded videos\' creation_time, and make it
+  This script adjusts GoPro recorded videos\' creation_time, and make it
   usable for gpx2video.
-  The idea is simple: Start a project in avidemux, append the slices from your
-  sjcam recordings,than do the neccesery cuts. Export the project, which will
-  result a python code.
+  The idea is simple: use gpscan to create .py files what can be loaded into 
+  avidemux as project files, then do the editing, save it and run this script
+  on the generated project files, which are technically python code.
   You run that python code with this script, which emulates a dummy Avidemux
   class. The dummy class will print you ffmpeg commands, so that will result
   new slices, what you can pass to gpx2video one by one, than concatenate.
-  What this script fixes: SJcam sets the end of the recording time as creation_time
-  while gpx2video assumes it\'s the start of the recording.
-  Since SJCam don\'t have a GPS clock, you might need to adjust the time with some
-  \'diff\' value, so the speed looks accurate on the resulted overlay.''', formatter_class=argparse.RawDescriptionHelpFormatter)
+  I mostly use this with my GoPro 12, which don't have an internal GPS, so it's also
+  helpful, that I can use a "diff" option, to adjust the recording's creation_time to
+  the actual precise GPS time.''', formatter_class=argparse.RawDescriptionHelpFormatter)
 
 parser.add_argument('-d', '--diff', default=os.environ.get('SJDEMUX_DIFF', 0), type=float, help='Time diff to adjust the counted creation time')
 parser.add_argument('-D', '--diff-mode', action='store_true', help='Instead of printing the commands, it calculates what diff was provided earlier creating the files')
@@ -230,8 +254,13 @@ parser.add_argument('-n', '--numdigits', default=3, help='Number of digits used 
 parser.add_argument('-s', '--sliceonly', action='store_true', help='Do only the slicing, no need for metadata fixing')
 parser.add_argument('-f', '--filter', default=os.environ.get('SJFILTER', '-codec copy'), help='Filter. Default: -codec copy')
 parser.add_argument('-b', '--blank', default=os.environ.get('SJBLANK', None), help='Blank mp4 file to use as input in the generated commands')
+parser.add_argument('-o', '--outdir', default=os.environ.get('SJOUTDIR', 'fsrc'), help='Output directory to put the resulting mp4 and input.txt files to')
 parser.add_argument('-t', '--trace', action='store_true', help='Print tracing information useful for debug')
 parser.add_argument('-r', '--roundup', type=rounding, default=0.05, help="Round up slice duration, if it's closer to the int than this number default: 0.05, allowed: [0, 0.5]")
 parser.add_argument('pyfile', type=argparse.FileType('r'), help='avidemux exported .py file')
 args = parser.parse_args()
+
+if not os.path.isdir(args.outdir):
+    os.mkdir(args.outdir)
+
 exec(args.pyfile.read())

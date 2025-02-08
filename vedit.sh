@@ -1,7 +1,6 @@
 # The original original way, I've speed up the videos to 4 times faster
 # Though, this is already slightly modified, since the `-crf 0` part was not part of this step, nor the keyint.
 
-# Note to self:
 # Working hwaccel video encode cmdline:
 # ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi -i input.mp4 -c:v hevc_vaapi -c:a copy -crf 23 output.mp4
 #encode_options="-hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi"
@@ -45,7 +44,7 @@ hwaccelng () {
 	quality_param=( "-qp" "22" )
 	overlay_filter='overlay'
 	outfr=origfr
-	duration_params=( )
+	#duration_params=( )
 	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
 	d_audio_filter_out='a'
 	d_audio_map=( "-map" "[@afa@]" '-ac' "$d_ac" "-ar" "$d_ar" )
@@ -63,7 +62,7 @@ nohwaccel () {
 	quality_param=( "-crf" "22" )
 	overlay_filter='overlay'
 	outfr=origfr
-	duration_params=( )
+	#duration_params=( )
 	d_audio_filter=( '[0:a]atempo=@sup@[a]' )
 	d_audio_filter_out='a'
 	d_audio_map=( "-map" "[@afa@]" '-ac' "$d_ac" "-ar" "$d_ar" )
@@ -192,22 +191,31 @@ sjrender () {
 	done
 }
 
+genuncut () {
+	: >genuncut.sh
+	for i in 20*S*u*.py ; do
+		gpdemux -d 0 $i  >>genuncut.sh
+	done
+}
+
 #
-# Newest version of things as of 2023-09-26
-# NB: SJFILTER is now empty again, simple copy happens during sjdemux runs.
+# Newest version of things as of 2024-12-31
 #
 sjrenderimg () {
-for i in wk/202*.mp4 ; do
-	fn="${i##*/}"
-	if [ -r wko/${fn%.mp4}-f0000.$d_ovlext ]; then
-		:
-	else
-		gpx="`(ls -1 ${i:0:15}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
-		echo prcessing $i - $gpx
-		echo " ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image"
-		TZ=Europe/Dublin ./gpx2video -v -m $i -g $gpx -l layout.xml -o wko/${fn%.*}-fXXXX.png image
-	fi
-done
+	layout="$1"
+	renderext="$2"
+	for i in wk/fsrc/*.mp4 ; do
+		fn="${i##*/}"
+		[ -d wk/fovl ] || mkdir wk/fovl
+		if [ -r wk/fovl/${fn%.mp4}-${renderext}0000.${d_ovlext} ]; then
+			:
+		else
+			gpx="`(ls -1 wk/${i:8:12}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
+			echo prcessing $i - $gpx
+			echo " ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/fovl/${fn%.*}-${renderext}XXXXX.${d_ovlext} image"
+			TZ="$SJTZ" ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/fovl/${fn%.*}-${renderext}XXXXX.${d_ovlext} image
+		fi
+	done
 }
 
 # And the magic happens here:
@@ -217,7 +225,7 @@ addoverlay () {
 	origffn="${orig##*/}"
 	origfno="${origffn%.*}"
 	ffmpeg -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%04d.$d_ovlext" \
+		-r 1 -i "${origfno}-${ovl}%05d.$d_ovlext" \
 		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
 		-r 30 -map '[v]' -map '[a]' -c:v libx265 -crf 22 \
 		-ac 2 -ar 48000 \
@@ -236,13 +244,42 @@ addoverlay () {
 # Render the video and the audio in separate streams, so here comes add overlay simplified
 
 gentemp () {
-	local origit="$1"
-	local tempfile="`mktemp -up .`.mp4"
+	local origds="$1"
+	local outfn="$2"
+	local ovl="$3"
 	if [ -r "$outfn" ]; then
-		printf "PLACE-%s-HOLDER" "$origit"
+		printf "PLACE-%s-HOLDER" "$origds"
 		return
 	fi
-	ffmpeg -f concat -safe 0 -i "$origit" -c copy "$tempfile"
+	[ -d tempdir ] || mkdir tempdir
+	local tempfile="`mktemp -up tempdir`.mp4"
+	local origit="${origds%.dsh}.input.txt"
+	local origffn="${origds##*/}"
+	local origfno="${origffn%.*}"
+	local date_prefix="${origfno%S*}"
+	local segment_ref=''
+	local slice_ref="${origfno#*S}"
+	local l_blank
+	local l_sdiff
+	local l_duration
+	[ -r "$origds" ] && . "$origds"
+	while [ "$slice_ref" != "${slice_ref#[0-9]}" ] ; do
+		segment_ref="$segment_ref${slice_ref:0:1}"
+		slice_ref="${slice_ref:1}"
+	done
+	local sovlprefix="../fovl/${date_prefix}S${segment_ref}u000-$ovl"
+	local dovlprefix="tempdir/${origfno}-$ovl"
+	l_sdiff="${l_sdiff%.*}"
+	for (( i=0 ; i<${l_duration%.*} ; i++ )) ; do
+		x=$[100000+i]
+		y=$[100000+i+l_sdiff]
+		ln -s "${sovlprefix}${y:1}.${d_ovlext}" "${dovlprefix}${x:1}.${d_ovlext}"
+	done
+	if [ "$l_blank" = "no" ]; then
+		ln -s "${origds%.dsh}.mp4" "$tempfile"
+	else
+		ffmpeg -f concat -safe 0 -i "$origit" -c copy "$tempfile"
+	fi
 	printf "%s" "$tempfile"
 }
 
@@ -251,7 +288,7 @@ addoverlays () {
 	local ovl="$2"
 	local origffn="${orig##*/}"
 	local origfno="${origffn%.*}"
-	local origit="${orig%.*}.input.txt"
+	local origds="${orig%.*}.dsh"
 	local l_speedup="${d_speedup}"
 	local -a l_tempfiles
 	local l_tempfn
@@ -260,7 +297,7 @@ addoverlays () {
 	local -a l_post_pre_overlay_filter
 	local -a l_pre_post_overlay_filter
 	local -a l_post_post_overlay_filter
-	local -a l_duration_params=( "${duration_params[@]}" )
+	#local -a l_duration_params=( "${duration_params[@]}" )
 	local l_overlay_filter_input="$d_overlay_filter_input"
 	local l_ovlext="$d_ovlext"
 	local -a ffmpeg_params
@@ -283,7 +320,8 @@ addoverlays () {
 		#-r 7.5  -map '[vo]' -map '[ao]' -c:v libx265 -crf 22 \
 		#-frames:v $[(vframes+3)/4] \
 	[ "$l_outfr" = 'origfr' ] && l_outfr="$origfr"
-	local outfn="${origfno}${ovl}${fnsuffix}.mp4"
+	[ -d "rout" ] || mkdir rout
+	local outfn="rout/${origfno}${ovl}${fnsuffix}.mp4"
 	if [ -r "${origdir}/${origfno}.sh" ]; then
 		echo reading "${origdir}/${origfno}.sh"
 		. "${origdir}/${origfno}.sh"
@@ -292,27 +330,31 @@ addoverlays () {
 		echo reading "${origdir}/${origfno}-${ovl}.sh"
 		. "${origdir}/${origfno}-${ovl}.sh"
 	fi
-	local outvframes=$[(vframes+l_speedup-1)/l_speedup]
-	local outduration=`printf 'scale=3\n%s/(%s)\n' "$outvframes" "$origfr" | bc `
-	[ "${outduration:0:1}" == "." ] && outduration="0$outduration"
-	echo vframes: $vframes aframes: $aframes outtvframes: $outvframes outduration: $outduration
-	l_duration_params=( "${l_duration_params[@]//@outvframes@/$outvframes}" )
-	l_duration_params=( "${l_duration_params[@]//@outduration@/$outduration}" )
+	#local outvframes=$[(vframes+l_speedup-1)/l_speedup]
+	#echo "Calculating outduration"
+	#local outduration=`printf 'scale=3\n%s/(%s)\n' "$outvframes" "$origfr" | bc `
+	#echo "Checking if outduration starts with a dot"
+	#[ "${outduration:0:1}" == "." ] && outduration="0$outduration"
+	#echo vframes: $vframes aframes: $aframes outtvframes: $outvframes outduration: $outduration
+	#l_duration_params=( "${l_duration_params[@]//@outvframes@/$outvframes}" )
+	#l_duration_params=( "${l_duration_params[@]//@outduration@/$outduration}" )
 	ffmpeg_params+=( "${encode_options[@]}" )
-	if [ -r "$origit" ];
+	if [ -r "$origds" ];
 	then
 		if [ -r "$outfn" ]; then
 			echo "$outfn exists, just dry-run assembling the final command line"
-			ffmpeg_params+=( "-i" "PLACE-${origit}-HOLDER" )
+			ffmpeg_params+=( "-i" "PLACE-${origds}-HOLDER" )
 		else
-			l_tempfn="`gentemp $origit`"
+			echo Calling gentemp
+			l_tempfn="`gentemp $origds $outfn $ovl`"
+			echo "returned filename=$l_tempfn"
 			l_tempfiles+=( "$l_tempfn" )
 			ffmpeg_params+=( "-i" "$l_tempfn" )
 		fi
 	else
 		ffmpeg_params+=( "-i" "$orig" )
 	fi
-	ffmpeg_params+=( "-r" "1" "-i" "${origfno}-${ovl}%04d.${d_ovlext}" )
+	ffmpeg_params+=( "-r" "1" "-i" "tempdir/${origfno}-${ovl}%05d.${d_ovlext}" )
 	ffmpeg_params+=( "${l_input[@]}" )
 	ffmpeg_filters+=( "${l_pre_pre_overlay_filter[@]}" )
 	ffmpeg_filters+=( "${pre_overlay_filter}" )
@@ -344,7 +386,7 @@ addoverlays () {
 	ffmpeg_params+=( "${l_outfr[@]}" )
 	l_audio_map=( "${l_audio_map[@]//@afa@/$l_audio_filter_out}" )
 	ffmpeg_params+=( "${l_audio_map[@]}" )
-	ffmpeg_params+=( "${l_duration_params[@]}" )
+	#ffmpeg_params+=( "${l_duration_params[@]}" )
 	ffmpeg_params+=( "${output_codec[@]}" )
 	ffmpeg_params+=( "${quality_param[@]}" )
 	ffmpeg_params+=( "${outfn}" )
@@ -352,22 +394,11 @@ addoverlays () {
 	echo ffmpeg "${ffmpeg_params[@]}"
 	[ -r "${outfn}" ] || time ffmpeg "${ffmpeg_params[@]}"
 
-	if [ -r "$origit" ];
-	then
-		[ -r "${l_tempfiles[0]}" ] && rm "${l_tempfiles[@]}"
-	fi
-#	echo ffmpeg $encode_options -i "$orig" \
-#		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-#		$l_input \
-#		-filter_complex "${l_pre_pre_overlay_filter}${pre_overlay_filter//@rfr/$rfr}${l_post_pre_overlay_filter}overlay${l_pre_post_overlay_filter}${post_overlay_filter}${l_post_post_overlay_filter}" \
-#		${outfr}  $amap -c:v $output_codec $quality_param \
-#		"${origfno}${ovl}.mp4"
-#	[ -r "${origfno}${ovl}.mp4" ] || time ffmpeg $encode_options -i "$orig" \
-#		-r 1 -i "${origfno}-${ovl}%04d.$ovlext" \
-#		$l_input \
-#		-filter_complex "${l_pre_pre_overlay_filter}${pre_overlay_filter//@rfr/$rfr}${l_post_pre_overlay_filter}overlay${l_pre_post_overlay_filter}${post_overlay_filter}${l_post_post_overlay_filter}" \
-#		${outfr}  $amap -c:v $output_codec $quality_param \
-#		"${origfno}${ovl}.mp4"
+#	if [ -r "$origit" ];
+#	then
+#		[ -r "${l_tempfiles[0]}" ] && rm "${l_tempfiles[@]}"
+#	fi
+	[ -d tempdir ] && rm -r tempdir
 }
 
 sjgentimesh () {
@@ -377,8 +408,8 @@ sjgentimesh () {
 }
 
 gpgentimesh () {
-	for i in 202?_????_S?t.py ; do
-		SJBLANK= gpdemux -d 0 $i ;
+	for i in 202?_????_S?u.py ; do
+		gpdemux -d 0 $i ;
 	done >timediff.sh
 }
 
@@ -387,6 +418,10 @@ sjtelltimediffs () {
 }
 
 gptelltimediffs () {
+	for i in 202?_????_S?u.py ; do gpdemux -D $i ; done | sed -e 's/u\.py /n.py /' | tee work.sh
+}
+
+gptelltimediffall () {
 	for i in 202?_????_S??.py ; do gpdemux -D $i ; done
 }
 
@@ -394,7 +429,8 @@ renderallvideo () {
 	# So, if the work dir, where the images were generated is /store/vedit/WKO.0903
 	# Than sourcedir is /store/vedit/WK.0903
 	renderext="$1"
-	sourcedir="${PWD%?.*}.${PWD##*.}"
+	#sourcedir="${PWD%?.*}.${PWD##*.}"
+	sourcedir="rsrc"
 	for i in ${sourcedir}/*.mp4 ; do
 		addoverlays "$i" "$renderext"
 	done
@@ -425,8 +461,8 @@ addoverlaysgrid () {
 	vfn="${vin##*/}"
 	ovl="${vfn%.mp4}"
 	vout="${vfn%.mp4}f.mp4"
-	echo ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
-	[ -r "$vout" ] || ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%04d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
+	echo ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%05d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
+	[ -r "$vout" ] || ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -r 1 -i "${ovl}"-f%05d.tiff -filter_complex '[0:v]select=not(mod(n\,4))[0v];[0v][1:v]overlay,setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=w=1920:h=1080:format=nv12;[0:a]atempo=4[a]' -map '[a]' -ac 2 -ar 48000 -c:v hevc_vaapi -qp 22 "$vout"
 }
 
 gridrender () {
@@ -490,10 +526,15 @@ ngpfixallvideo () {
 }
 
 concatall () {
+
 	renderext="$1"
 	ucrenderext="$( echo -n $renderext | tr a-z A-Z )"
-	fnprefix="$( ls -1 *mp4 | head -1 | cut -c 1-9 )"
-	concatvideo ${fnprefix}_${ucrenderext}N.mp4 ${fnprefix}_S?n???${renderext}a.mp4
+	if [ -d rout ]; then
+		fnprefix="$( ls -1 rout/*mp4 | head -1 | cut -c 1-14 )"
+	else
+		fnprefix="$( ls -1 *mp4 | head -1 | cut -c 1-9 )"
+	fi
+	concatvideo ${fnprefix#*/}_${ucrenderext}N.mp4 ${fnprefix}_S?n???${renderext}a.mp4
 }
 
 cleanupallvids () {
@@ -505,36 +546,26 @@ vedithelp () {
 # generates timediff.sh
 [ sjgentimesh | gpgentimesh ]
 
-# Generates the timeing files
-. timediff.sh
-
 # Update the timestamp to the time in the clock on the video
 vim timediff.sh
 
-# Rerun timediff.sh
+# Generates the timeing files
 . timediff.sh
 
 # To find out the differences
 [ sjtelltimediffs | gptelltimediffs ]
 
-# Create work.sh, update the i's, the diff (-d) and the date accordingly
-echo 'for i in 0 1 2 ; do . <( sjdemux -d -XX 1970_0101_S0n.py )' >>work.sh
-echo 'for i in 0 1 2 ; do . <( gpdemux -d -XX 1970_0101_S0n.py )' >>work.sh
-
-# Generate the of videos
-. work.sh
-
 #### Now, run these in the gpx2video build dir:
 # The example sjrenderimg function uses the "f" renderext.
-# Now go to the wko dir:
-sjrenderimg
+sjrenderimg 4k f
 
-# Now go to your "wko" directory:
+# Generate the src videos
+. work.sh
+
+# Now render those segments
 renderallvideo f
-[ sjfixallvideo f | gpfixallvideo f | ngpfixallvideo f ]
 
 concatall f
-speedup4raw265af 1970_0101_FN.mp4 # Skip this with hwaccel generated defaults
 sjmpv 1970_0101_??.mp4 & sjmpv /path/to/your/soundtrack/dir
 sjstgen 1970_0101_??.mp4 1970_0101_soundtrack.txt
 # here comes the soundtrack composition work in kdenlive
