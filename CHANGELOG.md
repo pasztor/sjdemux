@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2025.04.20.
+* vedit.sh - After the directory structure change the rendering of gridvids were not working anymore so that part needed some adjustment to keep up with the rest of the changes
+* vedit.sh - Some major cleanup of old and obsolete functions
+* vedit.sh - Back to the default of software render instead of hwaccelerated render. With the FreeBSD 14.2-RELEASE and some of the mesa package updates it was clear to me that those features are still in an early stage of development, so I went back to the safe option and to render the videos using raw CPU power.
+
 ## 2025.01.19.
 * major refactor in the directory structure:
   * Now it just needs one directory, and every other "piece" goes into subdirectories:

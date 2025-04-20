@@ -10,19 +10,9 @@ defaults () {
 	d_ac=2
 	d_ar=48000
 	d_ovlext=tiff
-}
-
-hwaccel () {
-	declare -a encode_options=( "-vaapi_device" "/dev/dri/renderD128" )
-	output_codec="hevc_vaapi"
-	post_overlay_filter=",setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=format=nv12"
-	#pre_overlay_filter="[0:v]fps=@rfr[0v];[0v][1:v]"
-	pre_overlay_filter=""
-	quality_param="-qp 22"
-	outfr=origfr
-	#outfr=''
-	#amap='-map [v] -map [a] -ac 2 -ar 48000'
-	amap='-an'
+	ovlsrcdir=fsrc
+	ovldstdir=fovl
+	uncutprefix=u
 }
 
 preview_on() {
@@ -31,6 +21,14 @@ preview_on() {
 
 preview_off() {
 	post_scale=''
+}
+
+denoise_on() {
+       pre_overlay_filter='[0:v]select=not(mod(n\,@sup@)),hqdn3d[0v]'
+}
+
+denoise_off() {
+       pre_overlay_filter='[0:v]select=not(mod(n\,@sup@))[0v]'
 }
 
 hwaccelng () {
@@ -69,16 +67,6 @@ nohwaccel () {
 	fnsuffix='a'
 }
 
-nohwaspeedup () {
-	encode_options=""
-	output_codec=libx265
-	post_overlay_filter=",setpts=0.25*PTS"
-	pre_overlay_filter=""
-	quality_param="-crf 22"
-	outfr=origfr
-	amap='-an'
-}
-
 # Highly experimental. Not working yet.
 # Just for testing the ideas, I've got on ffmpeg-users from Chen, Wenbin
 #
@@ -94,39 +82,7 @@ fhwaccel () {
 }
 
 defaults
-hwaccelng
-
-# Timing comparison for hwaccel encode of a slice:
-# real	1m54.532s
-# user	20m37.154s
-# sys	0m15.613s
-# 
-# Same file encodced with nohwaccel:
-# real	6m1.411s
-# user	89m28.432s
-# sys	0m10.091s
-
-#ovlext=png
-
-speedup4raw265af () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	tempfile=raw.h265
-	ffmpeg -i "$orig" -map 0:v -c:v copy -bsf:v hevc_mp4toannexb "$tempfile"
-	ffmpeg -fflags +genpts -r 30 -i "$tempfile" -i "$orig" -map 0:v -c:v copy -map 1:a -af atempo=4 -ar 48000 -ac 2 -movflags -faststart "$new"
-	rm "$tempfile"
-}
-
-speedup4hw265re () {
-	orig="$1"
-	new="${orig%.*}s4.mp4"
-	ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi \
-		-i "$orig" \
-		-filter_complex '[0:v]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
-		-map '[v]' -map '[a]' \
-		-r 30 -c:v hevc_vaapi -qp 22 "$new"
-	#ffmpeg -vaapi_device /dev/dri/renderD128 -i "$orig" -filter_complex '[0:v]setpts=0.25*PTS,hwupload,scale_vaapi=format=nv12[v];[0:a]atempo=4[a]' -r 30 -map '[v]' -map '[a]' -c:v hevc_vaapi -qp 22 "$new"
-}
+nohwaccel
 
 addsoundtrack () {
 	orig="$1"
@@ -178,59 +134,24 @@ concatvideo () {
 	rm $tempfile
 }
 
-# This is actually a separate script file in the build directory of gpx2video.
-# In the build directory I keep a symlink named wk pointing to the directory
-# I am actually working with.
-sjrender () {
-	for i in wk/202*.mp4 ; do
-		if [ -r /srv/work/$i ]; then
-			:
-		else
-			TZ=Europe/Dublin ./gpx2video -v -m $i -g ${i%n???.mp4} -l layout.xml -o /srv/work/$i  video
-		fi
-	done
-}
-
-genuncut () {
-	: >genuncut.sh
-	for i in 20*S*u*.py ; do
-		gpdemux -d 0 $i  >>genuncut.sh
-	done
-}
-
 #
 # Newest version of things as of 2024-12-31
 #
 sjrenderimg () {
 	layout="$1"
 	renderext="$2"
-	for i in wk/fsrc/*.mp4 ; do
+	for i in wk/${ovlsrcdir}/*.mp4 ; do
 		fn="${i##*/}"
-		[ -d wk/fovl ] || mkdir wk/fovl
-		if [ -r wk/fovl/${fn%.mp4}-${renderext}0000.${d_ovlext} ]; then
+		[ -d wk/${ovldstdir} ] || mkdir wk/${ovldstdir}
+		if [ -r wk/${ovldstdir}/${fn%.mp4}-${renderext}0000.${d_ovlext} ]; then
 			:
 		else
 			gpx="`(ls -1 wk/${i:8:12}*.gpx ; ls -1 wk/*.gpx ) | head -1 `"
 			echo prcessing $i - $gpx
-			echo " ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/fovl/${fn%.*}-${renderext}XXXXX.${d_ovlext} image"
-			TZ="$SJTZ" ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/fovl/${fn%.*}-${renderext}XXXXX.${d_ovlext} image
+			echo " ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/${ovldstdir}/${fn%.*}-${renderext}XXXXX.${d_ovlext} image"
+			TZ="$SJTZ" ./gpx2video -m $i -g $gpx -l layout-${layout}.xml -o wk/${ovldstdir}/${fn%.*}-${renderext}XXXXX.${d_ovlext} image
 		fi
 	done
-}
-
-# And the magic happens here:
-addoverlay () {
-	orig="$1"
-	ovl="$2"
-	origffn="${orig##*/}"
-	origfno="${origffn%.*}"
-	ffmpeg -i "$orig" \
-		-r 1 -i "${origfno}-${ovl}%05d.$d_ovlext" \
-		-filter_complex '[0:v]fps=7.5[bg];[1:v]fps=7.5[ovl];[bg][ovl]overlay[ov];[ov]setpts=0.25*PTS[v];[0:a]atempo=4[a]' \
-		-r 30 -map '[v]' -map '[a]' -c:v libx265 -crf 22 \
-		-ac 2 -ar 48000 \
-		-force_key_frames 'expr:gte(t,n_forced*10)' \
-		"${origfno}${ovl}.mp4"
 }
 
 # So, practically, I just needs to go into wko dir, and run
@@ -267,9 +188,10 @@ gentemp () {
 		segment_ref="$segment_ref${slice_ref:0:1}"
 		slice_ref="${slice_ref:1}"
 	done
-	local sovlprefix="../fovl/${date_prefix}S${segment_ref}u000-$ovl"
+	local sovlprefix="../${ovldstdir}/${date_prefix}S${segment_ref}${uncutprefix}000-$ovl"
 	local dovlprefix="tempdir/${origfno}-$ovl"
 	l_sdiff="${l_sdiff%.*}"
+	[ -n "sdiff_override" ] && l_sdiff="${sdiff_override}"
 	for (( i=0 ; i<${l_duration%.*} ; i++ )) ; do
 		x=$[100000+i]
 		y=$[100000+i+l_sdiff]
@@ -421,10 +343,6 @@ gptelltimediffs () {
 	for i in 202?_????_S?u.py ; do gpdemux -D $i ; done | sed -e 's/u\.py /n.py /' | tee work.sh
 }
 
-gptelltimediffall () {
-	for i in 202?_????_S??.py ; do gpdemux -D $i ; done
-}
-
 renderallvideo () {
 	# So, if the work dir, where the images were generated is /store/vedit/WKO.0903
 	# Than sourcedir is /store/vedit/WK.0903
@@ -434,26 +352,6 @@ renderallvideo () {
 	for i in ${sourcedir}/*.mp4 ; do
 		addoverlays "$i" "$renderext"
 	done
-}
-
-sjfixallvideo () {
-	sourcedir="${PWD%?.*}.${PWD##*.}"
-	renderext="$1"
-	for i in ${sourcedir}/*.mp4 ; do
-		fn="${i##*/}"
-		if [ -r "${fn%.mp4}${renderext}a.mp4" ] ; then
-			:
-		else
-			replaceaudio "${fn%.mp4}${renderext}.mp4" $i
-		fi
-	done
-}
-
-speedup4hwrender () {
-	vin="$1"
-	vfn="${vin##*/}"
-	vout="${vfn%.mp4}f.mp4"
-	ffmpeg -vaapi_device /dev/dri/renderD128 -i $vin -filter_complex setpts=0.25*PTS,format=yuv420p,hwupload,scale_vaapi=format=nv12 -r 30/1 -an -c:v hevc_vaapi -qp 22 $vout
 }
 
 addoverlaysgrid () {
@@ -467,63 +365,25 @@ addoverlaysgrid () {
 
 gridrender () {
 	vout="$1"
+	# TopLeft
 	v0="$2"
+	# BottomLeft
 	v1="$3"
+	# TopRight
 	v2="$4"
+	# BottomRight
 	v3="$5"
-	ffmpeg -i "$v0" -i "$v1" -i "$v2" -i "$v3" -vaapi_device /dev/dri/renderD128 -filter_complex '[0:a][1:a][2:a][3:a]amerge=inputs=4,pan=stereo|c0<c0+c2|c1<c4+c6[a];[0:v]crop=h=1080:y=0[0v];[1:v]crop=h=1080:y=0[1v];[2:v]crop=h=1080:y=0[2v];[3:v]crop=h=1080:y=0[3v];[0v][1v][2v][3v]xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0,format=yuv420p,hwupload,scale_vaapi=format=nv12' -c:v hevc_vaapi -map '[a]' -qp 22 "$vout"
+	#ffmpeg -i "$v0" -i "$v1" -i "$v2" -i "$v3" -vaapi_device /dev/dri/renderD128 -filter_complex '[0:a][1:a][2:a][3:a]amerge=inputs=4,pan=stereo|c0<c0+c2|c1<c4+c6[a];[0:v]crop=h=1080:y=0[0v];[1:v]crop=h=1080:y=0[1v];[2:v]crop=h=1080:y=0[2v];[3:v]crop=h=1080:y=0[3v];[0v][1v][2v][3v]xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0,format=yuv420p,hwupload,scale_vaapi=format=nv12' -c:v hevc_vaapi -map '[a]' -qp 22 "$vout"
+	ffmpeg -i "$v0" -i "$v1" -i "$v2" -i "$v3" -filter_complex '[0:a][1:a][2:a][3:a]amerge=inputs=4,pan=stereo|c0<c0+c2|c1<c4+c6[a];[0:v]scale=w=1920:h=1080[0v];[1:v]scale=w=1920:h=1080[1v];[2:v]scale=w=1920:h=1080[2v];[3:v]scale=w=1920:h=1080[3v];[0v][1v][2v][3v]xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0' -c:v libx265 -map '[a]' -crf 22 "$vout"
 }
 
-gridrenderallvideo () {
-	# So, if the work dir, where the images were generated is /store/vedit/WKO.0903
-	# Than sourcedir is /store/vedit/WK.0903
-	gvout="$1"
-	sourcedir="${PWD%?.*}.${PWD##*.}"
-	for i in ${sourcedir}/*.mp4 ; do
-		vfn="${i##*/}"
-		echo checking: "${vfn%.mp4}-f0000.$d_ovlext"
-		if [ -r "${vfn%.mp4}-f0000.$d_ovlext" ]; then
-			echo running addoverlaysgrid on "$1"
-			addoverlaysgrid "$i"
-		else
-			echo running speedup4hwrender on "$1"
-			speedup4hwrender "$i"
-		fi
-	done
-	#ngpfixallvideo f
+gridrenderall () {
+	local ovldstdir=govl
+	local uncutprefix=g
+	local sdiffoverride=0
+	renderallvideo g
 }
 
-gpfixallvideo () {
-	sourcedir="${PWD%?.*}.${PWD##*.}"
-	renderext="$1"
-	for i in ${sourcedir}/*.mp4 ; do
-		fn="${i##*/}"
-		destfn="${fn%.mp4}${renderext}a.mp4"
-		vidf="${fn%.mp4}${renderext}.mp4"
-		vduration=`ffprobe -of json -show_entries stream "$vidf" 2>/dev/null | jq '.streams[0].duration' | tr -d '"' `
-		if [ -r "$destfn" ] ; then
-			:
-		else
-			ffmpeg -i "$vidf" -i "$i" -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 -t $vduration "$destfn"
-		fi
-	done
-}
-
-ngpfixallvideo () {
-	sourcedir="${PWD%?.*}.${PWD##*.}"
-	renderext="$1"
-	for i in ${sourcedir}/*.mp4 ; do
-		fn="${i##*/}"
-		destfn="${fn%.mp4}${renderext}a.mp4"
-		vidf="${fn%.mp4}${renderext}.mp4"
-		vduration=`ffprobe -of json -show_entries stream "$vidf" 2>/dev/null | jq '.streams[0].duration' | tr -d '"' `
-		if [ -r "$destfn" ] ; then
-			:
-		else
-			ffmpeg -i "$vidf" -i "$i" -c:v copy -map 0:v:0 -af atempo=4 -ar 48000 -ac 2 -map 1:a:0 -t $vduration "$destfn"
-		fi
-	done
-}
 
 concatall () {
 
@@ -535,10 +395,6 @@ concatall () {
 		fnprefix="$( ls -1 *mp4 | head -1 | cut -c 1-9 )"
 	fi
 	concatvideo ${fnprefix#*/}_${ucrenderext}N.mp4 ${fnprefix}_S?n???${renderext}a.mp4
-}
-
-cleanupallvids () {
-	rm *mp4 *png *tiff
 }
 
 vedithelp () {
