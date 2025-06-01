@@ -16,7 +16,8 @@ def get_video_info(filename):
 
 def vinfo_time_to_epoch(video_info):
     ctime = time.strptime( video_info['streams'][0]['tags']['creation_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
-    return calendar.timegm(ctime)
+    #return calendar.timegm(ctime)
+    return time.mktime(ctime)
 
 mre = re.compile('^GL(?P<n>\d{6}).LRV', re.I)
 
@@ -162,6 +163,7 @@ class Avidemux:
                     slice_info = get_video_info(newfilename)
                     slice_ctime = vinfo_time_to_epoch(slice_info)
                     print(f'{newfilename} diff: {slice_ctime-newstartts}', file=sys.stderr)
+                    print(f'slice_ctime: {slice_ctime}, newstartts: {newstartts}', file=sys.stderr)
                     print(f'. <( gpdemux -o rsrc -d {slice_ctime-newstartts} {args.pyfile.name} )')
                 else:
                     print(f'file doesn\'t exist: {newfilename}', file=sys.stderr)
@@ -193,7 +195,7 @@ class Avidemux:
                             print(f"ffmpeg -i {args.blank} -c copy -metadata 'creation_time={newstart}' -t {durms/1000000} {newfilename}")
                         else:
                             with open(newdfilename, 'w') as dfile:
-                                dfile.write(f'l_startdiff={sdiff}\nl_blank=no\nl_duration={durms/1000000}\n')
+                                dfile.write(f'l_sdiff={sdiff}\nl_blank=no\nl_duration={durms/1000000}\n')
                             print(f"ffmpeg -i {self.videos[vidno]['filename']} {args.filter} -metadata 'creation_time={newstart}' -ss {startms/1000000} -t {durms/1000000} {newfilename}")
                 else:
                     sourcefile = os.path.join(args.sourcedir, newfilename)
