@@ -191,7 +191,7 @@ gentemp () {
 	local sovlprefix="../${ovldstdir}/${date_prefix}S${segment_ref}${uncutprefix}000-$ovl"
 	local dovlprefix="tempdir/${origfno}-$ovl"
 	l_sdiff="${l_sdiff%.*}"
-	[ -n "sdiff_override" ] && l_sdiff="${sdiff_override}"
+	[ -n "$sdiff_override" ] && l_sdiff="${sdiff_override}"
 	for (( i=0 ; i<${l_duration%.*} ; i++ )) ; do
 		x=$[100000+i]
 		y=$[100000+i+l_sdiff]
@@ -247,10 +247,16 @@ addoverlays () {
 	if [ -r "${origdir}/${origfno}.sh" ]; then
 		echo reading "${origdir}/${origfno}.sh"
 		. "${origdir}/${origfno}.sh"
+		if [ -r "${outfn}" ]; then
+			[ "${origdir}/${origfno}.sh" -nt "${outfn}" ] && rm "${outfn}"
+		fi
 	fi
 	if [ -r "${origdir}/${origfno}-${ovl}.sh" ]; then
 		echo reading "${origdir}/${origfno}-${ovl}.sh"
 		. "${origdir}/${origfno}-${ovl}.sh"
+		if [ -r "${outfn}" ]; then
+			[ "${origdir}/${origfno}-${ovl}.sh" -nt "${outfn}" ] && rm "${outfn}"
+		fi
 	fi
 	#local outvframes=$[(vframes+l_speedup-1)/l_speedup]
 	#echo "Calculating outduration"
