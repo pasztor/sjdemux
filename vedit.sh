@@ -134,6 +134,18 @@ concatvideo () {
 	rm $tempfile
 }
 
+concatarray () {
+	local delim="$1"
+	shift
+	local ret="$1"
+	shift
+	local i
+	for i in "$@" ; do
+		ret+="$delim$i"
+	done
+	printf "%s" "$ret"
+}
+
 #
 # Newest version of things as of 2024-12-31
 #
