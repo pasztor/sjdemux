@@ -17,6 +17,7 @@ local l_crop_o_x=2900
 local l_crop_o_y=620
 local l_crop_s_mag=1.6
 local l_crop_d_mag=1.2
+local -a l_enhance_filters=()
 
 ### Loading origds
 echo Debug origds: $origds
@@ -65,6 +66,7 @@ l_pre_pre_of_a=(
 	"crop=${l_crop_w}:${l_crop_h}:'${l_crop_f_x}':'${l_crop_f_y}'"
 	"scale='round(iw*${l_crop_f_mag}):round(ih*${l_crop_f_mag}):eval=frame'"
 	"crop='${l_crop_w}:${l_crop_h}:${l_crop_om_x}:${l_crop_om_y}'"
+	"${l_enhance_filters[@]}"
 	"sendcmd=f=${l_ivid%.*}_${l_eindex}.cmd"
 	"drawbox=0:0:${l_crop_w}:${l_crop_h}:t=3:c=black@0.8"
 #	"drawtext=text='%{frame_num},%{pts},%{e\:t}"$'\n'"%{e\:${l_crop_f_x}},%{e\:${l_crop_f_y}}':fontsize=40:fontcolor=${l_dbg_c_c}:fontfile=/usr/local/share/fonts/Liberation/LiberationSerif-Regular.ttf:x=10:y=10"
@@ -114,6 +116,7 @@ local l_crop_o_x=2400
 local l_crop_o_y=620
 local l_crop_s_mag=2
 local l_crop_e_mag=1.5
+local -a l_enhance_filters=( "eq=brightness=0.1" )
 
 ### Loading origds
 echo Debug origds: $origds
@@ -162,6 +165,7 @@ l_pre_pre_of_a=(
 	"crop=${l_crop_w}:${l_crop_h}:'${l_crop_f_x}':'${l_crop_f_y}'"
 	"scale='round(iw*${l_crop_f_mag}):round(ih*${l_crop_f_mag}):eval=frame'"
 	"crop='${l_crop_w}:${l_crop_h}:${l_crop_om_x}:${l_crop_om_y}'"
+	"${l_enhance_filters[@]}"
 	"sendcmd=f=${l_ivid%.*}_${l_eindex}.cmd"
 	"drawbox=0:0:${l_crop_w}:${l_crop_h}:t=3:c=black@0.8"
 #	"drawtext=text='%{frame_num},%{pts},%{e\:t}"$'\n'"%{e\:${l_crop_f_x}},%{e\:${l_crop_f_y}}':fontsize=40:fontcolor=${l_dbg_c_c}:fontfile=/usr/local/share/fonts/Liberation/LiberationSerif-Regular.ttf:x=10:y=10"
@@ -211,6 +215,7 @@ local l_crop_o_x=2200
 local l_crop_o_y=600
 local l_crop_s_mag=2.5
 local l_crop_e_mag=2.0
+local -a l_enhance_filters=()
 
 ### Loading origds
 echo Debug origds: $origds
@@ -259,6 +264,7 @@ l_pre_pre_of_a=(
 	"crop=${l_crop_w}:${l_crop_h}:'${l_crop_f_x}':'${l_crop_f_y}'"
 	"scale='round(iw*${l_crop_f_mag}):round(ih*${l_crop_f_mag}):eval=frame'"
 	"crop='${l_crop_w}:${l_crop_h}:${l_crop_om_x}:${l_crop_om_y}'"
+	"${l_enhance_filters[@]}"
 	"sendcmd=f=${l_ivid%.*}_${l_eindex}.cmd"
 	"drawbox=0:0:${l_crop_w}:${l_crop_h}:t=3:c=black@0.8"
 #	"drawtext=text='%{frame_num},%{pts},%{e\:t}"$'\n'"%{e\:${l_crop_f_x}},%{e\:${l_crop_f_y}}':fontsize=40:fontcolor=${l_dbg_c_c}:fontfile=/usr/local/share/fonts/Liberation/LiberationSerif-Regular.ttf:x=10:y=10"
