@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2025.07.20.
+Minor fixes:
+* gpdemux - Added verbosity on flushConcatBuffer
+* gpdemux - Fixing ffmpeg command when only one input file is in the buffer, for some reason with only one file with an inpoint ffmpeg generated a buggy mp4
+* vedit.sh - Fixing gentemp when symlink is created for a `l_blank=no` file.
+
 ## 2025.04.20.
 * vedit.sh - After the directory structure change the rendering of gridvids were not working anymore so that part needed some adjustment to keep up with the rest of the changes
 * vedit.sh - Some major cleanup of old and obsolete functions

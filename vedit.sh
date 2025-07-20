@@ -210,7 +210,7 @@ gentemp () {
 		ln -s "${sovlprefix}${y:1}.${d_ovlext}" "${dovlprefix}${x:1}.${d_ovlext}"
 	done
 	if [ "$l_blank" = "no" ]; then
-		ln -s "${origds%.dsh}.mp4" "$tempfile"
+		ln -s "../${origds%.dsh}.mp4" "$tempfile"
 	else
 		ffmpeg -f concat -safe 0 -i "$origit" -c copy "$tempfile"
 	fi
@@ -285,7 +285,7 @@ addoverlays () {
 			echo "$outfn exists, just dry-run assembling the final command line"
 			ffmpeg_params+=( "-i" "PLACE-${origds}-HOLDER" )
 		else
-			echo Calling gentemp
+			echo Calling: gentemp $origds $outfn $ovl
 			l_tempfn="`gentemp $origds $outfn $ovl`"
 			echo "returned filename=$l_tempfn"
 			l_tempfiles+=( "$l_tempfn" )

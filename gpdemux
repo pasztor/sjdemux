@@ -78,7 +78,7 @@ class Avidemux:
         creation_time = self.concatbuffer['creation_time']
 
         if inputfile is not None:
-            args.trace and print(f' -> Debug flushing: concatbuffer: {self.concatbuffer}', file=sys.stderr)
+            args.trace and print(f' -> Debug flushing: lf: {len(self.concatbuffer["files"])} concatbuffer: {self.concatbuffer}', file=sys.stderr)
 
             with open(inputfile, 'w') as winputfile:
                 for cinfile in self.concatbuffer['files']:
@@ -100,7 +100,19 @@ class Avidemux:
             else:
                 with open(dfile, 'w') as wdfile:
                     wdfile.write(f'l_sdiff={sdiff}\nl_blank=no\nl_duration={duration}\n')
-                print(f"ffmpeg -f concat -safe 0 -i {inputfile} {args.filter} -metadata 'creation_time={creation_time}' {outputfile}")
+                if len(self.concatbuffer['files']) == 1:
+                    cbfile = self.concatbuffer['files'][0]
+                    infilename = cbfile['filename']
+                    durargs = list()
+                    ss = 0
+                    if 'inpoint' in cbfile:
+                        ss = cbfile['inpoint']
+                        durargs.append(f'-ss {ss}')
+                    if 'outpoint' in cbfile:
+                        durargs.append(f'-t {cbfile["outpoint"]-ss}')
+                    print(f"ffmpeg -i {infilename} {args.filter} -metadata 'creation_time={creation_time}' {' '.join(durargs)} {outputfile}")
+                else:
+                    print(f"ffmpeg -f concat -safe 0 -i {inputfile} {args.filter} -metadata 'creation_time={creation_time}' {outputfile}")
 
         self.concatbuffer['inputfile'] = None
         self.concatbuffer['files'] = []
