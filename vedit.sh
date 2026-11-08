@@ -53,7 +53,7 @@ nohwaccel () {
 	encode_options=( )
 	output_codec=( "-c:v" "libx265" )
 	post_scale=''
-	post_overlay_filter=( "setpts=PTS/@sup@" )
+	post_overlay_filter=( "setpts=PTS/@sup@" "format=yuv420p" )
 	post_overlay_filter_psc=( "scale=@psc@" )
 	pre_overlay_filter='[0:v]select=not(mod(n\,@sup@))[0v]'
 	d_overlay_filter_input='0v'
