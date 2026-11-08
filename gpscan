@@ -1,3 +1,4 @@
+#!/home/pasztor/venvs/sjdemux/bin/python
 #!/usr/bin/env python
 import os
 import sys
@@ -184,7 +185,7 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
                 print(json.dumps(gpxranges, indent=2))
                 gpxranges[j]['start_time']=gpxranges[i[0]]['start_time']
                 gpxranges[j]['stop_time']=gpxranges[i[1]]['stop_time']
-        tre = re.compile('.*<trkpt.*<time>(?P<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)</time>.*')
+        tre = re.compile(r'.*<trkpt.*<time>(?P<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)</time>.*')
         args.trace and print(f'gpxranges:\n' + json.dumps(gpxranges, indent=2))
         for i in gpxranges:
             # gpxlog uses the following file name pattern: "YYYYmmdd-HHMMss - TRACKNAME.gpx"
@@ -218,6 +219,34 @@ adm.setContainer("MKV", "forceAspectRatio=False", "displayWidth=1280", "displayA
                         else: # Else, it's a different part of the file, can be passed through
                             outfile.write(line)
 
+    def dump(self):
+        try:
+            import yaml
+        except ModuleNotFoundError as e:
+            print("Couldn't load yaml", file=sys.stderr)
+            return
+        dd = {'kind': 'sjdemux', 'version': '1.0', 'sessions': []}
+        if 'SJBLANK' in os.environ:
+            dd.setdefault('blankfile', os.environ.get('SJBLANK'))
+        for sid in self.__sessions:
+            session = self.__sessions.get(sid)
+            sdata = dict()
+            sdata.setdefault('len', session.get('length'))
+            sdata.setdefault('ctime', time.strftime('%FT%T.000000Z', session.get('ctime')))
+            sdata.setdefault('prefix', session.get('prefix'))
+            sdata.setdefault('sid', sid)
+            sdata.setdefault('files', [])
+            for filedata in session.get('files'):
+                ffname = filedata.get('file')
+                dd.setdefault('sdir', os.path.dirname(ffname))
+                assert os.path.dirname(ffname) == dd.get('sdir'), 'All the source files must come from the same dir'
+                sdata['files'].append(os.path.basename(ffname))
+            dd['sessions'].append(sdata)
+        if len(dd.get('sessions')) <= 0:
+            return
+        pprefix = dd.get('sessions')[0].get('prefix').rsplit('_',1)[0]
+        with open(f'{pprefix}_in.sjp', 'w') as df:
+            df.write(yaml.dump(dd))
 
 if 'SJTZS' in os.environ:
     os.environ['TZ'] = os.environ['SJTZS']
@@ -227,7 +256,7 @@ if not os.path.exists(args.destdir):
     print(f'Destination directory {args.destdir} does not exist, creating it now', file=sys.stderr)
     os.makedirs(args.destdir)
 
-mre = re.compile('^GX(?P<n>\d{2})(?P<m>\d{4}).MP4', re.I)
+mre = re.compile(r'^GX(?P<n>\d{2})(?P<m>\d{4}).MP4', re.I)
 list_of_files = sorted([i for i in os.listdir(args.dir) if mre.match(i) ])
 
 sessions = RecSessions(
@@ -245,3 +274,4 @@ for fn in list_of_files:
     sessions.addfile(fn)
 sessions.flush()
 sessions.gpxflush()
+sessions.dump()

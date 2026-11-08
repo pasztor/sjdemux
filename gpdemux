@@ -19,7 +19,7 @@ def vinfo_time_to_epoch(video_info):
     #return calendar.timegm(ctime)
     return time.mktime(ctime)
 
-mre = re.compile('^GL(?P<n>\d{6}).LRV', re.I)
+mre = re.compile(r'^GL(?P<n>\d{6}).LRV', re.I)
 
 def file_name_normalize(filename):
     ret = filename
